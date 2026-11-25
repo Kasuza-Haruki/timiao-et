@@ -31,9 +31,18 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import app.timiao.et.ui.AppViewModel
 import app.timiao.et.ui.components.GlassBackdrop
 import app.timiao.et.ui.components.GlassDock
+import app.timiao.et.ui.screens.AUTO_RULES_ROUTE
+import app.timiao.et.ui.screens.AppSplitScreen
+import app.timiao.et.ui.screens.AutoRulesScreen
+import app.timiao.et.ui.screens.DiagnosticsScreen
+import app.timiao.et.ui.screens.EventLogScreen
+import app.timiao.et.ui.screens.ShareScreen
+import app.timiao.et.ui.screens.SplitRoutes
+import app.timiao.et.ui.screens.TrafficScreen
 import app.timiao.et.ui.screens.HomeScreen
 import app.timiao.et.ui.screens.NetworkEditScreen
 import app.timiao.et.ui.screens.NetworksScreen
+import app.timiao.et.ui.screens.NodeInfoScreen
 import app.timiao.et.ui.screens.PeersScreen
 import app.timiao.et.ui.screens.SettingsScreen
 
@@ -42,8 +51,22 @@ object Routes {
     const val PEERS = "peers"
     const val NETWORKS = "networks"
     const val SETTINGS = "settings"
+    const val NODE_INFO = "node_info"
+    const val EVENT_LOG = "event_log"
+    const val DIAGNOSTICS = "diagnostics"
+    const val TRAFFIC = "traffic"
+    const val SHARE_PATTERN = "share/{id}"
+    fun share(id: String) = "share/$id"
     const val EDIT_PATTERN = "network/{id}?open={open}"
     fun edit(id: String, open: String = "none") = "network/$id?open=$open"
+}
+
+/** Screens pushed on top of a tab; the dock keeps the owning tab highlighted. */
+private fun dockOwner(route: String?): String? = when (route) {
+    Routes.NODE_INFO -> Routes.HOME
+    Routes.EVENT_LOG -> Routes.PEERS
+    Routes.DIAGNOSTICS, Routes.TRAFFIC, AUTO_RULES_ROUTE, SplitRoutes.PATTERN -> Routes.SETTINGS
+    else -> if (route?.startsWith("share/") == true) Routes.NETWORKS else route
 }
 
 @Composable
@@ -55,7 +78,7 @@ fun TimiaoRoot(vm: AppViewModel) {
     val dockRoute = when {
         route == null -> Routes.HOME
         route.startsWith("network/") -> Routes.NETWORKS
-        else -> route
+        else -> dockOwner(route) ?: Routes.HOME
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -71,16 +94,47 @@ fun TimiaoRoot(vm: AppViewModel) {
             popExitTransition = { pageExit(initialState.destination.route, targetState.destination.route, reduced) },
         ) {
             composable(Routes.HOME) {
-                HomeScreen(vm) { target -> nav.navigateTopLevel(target) }
+                HomeScreen(vm) { target ->
+                    if (target == Routes.NODE_INFO) nav.navigate(Routes.NODE_INFO)
+                    else nav.navigateTopLevel(target)
+                }
             }
             composable(Routes.PEERS) {
-                PeersScreen(vm)
+                PeersScreen(
+                    vm = vm,
+                    onNavigate = { target ->
+                        if (target == Routes.EVENT_LOG) nav.navigate(Routes.EVENT_LOG)
+                        else nav.navigateTopLevel(target)
+                    },
+                    actions = { peer -> app.timiao.et.share.PeerActionsSheetContent(peer, onDone = {}) },
+                )
+            }
+            composable(Routes.NODE_INFO) {
+                NodeInfoScreen(vm, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.EVENT_LOG) {
+                EventLogScreen(vm, onBack = { nav.popBackStack() })
             }
             composable(Routes.NETWORKS) {
                 NetworksScreen(vm) { nav.navigate(it) }
             }
             composable(Routes.SETTINGS) {
-                SettingsScreen(vm)
+                SettingsScreen(vm, onOpen = { nav.navigate(it) })
+            }
+            composable(Routes.DIAGNOSTICS) {
+                DiagnosticsScreen(
+                    vm = vm,
+                    onBack = { nav.popBackStack() },
+                    configProvider = { net -> vm.rawConfig(net.id) },
+                )
+            }
+            composable(Routes.TRAFFIC) { TrafficScreen(vm, recorder = vm.trafficRecorder) }
+            composable(AUTO_RULES_ROUTE) { AutoRulesScreen(vm) { nav.popBackStack() } }
+            composable(SplitRoutes.PATTERN, listOf(navArgument("networkId") { type = NavType.StringType })) {
+                AppSplitScreen(SplitStoreGlobalId) { nav.popBackStack() }
+            }
+            composable(Routes.SHARE_PATTERN, listOf(navArgument("id") { type = NavType.StringType })) { b ->
+                ShareScreen(vm, b.arguments?.getString("id") ?: "", onBack = { nav.popBackStack() })
             }
             composable(
                 route = Routes.EDIT_PATTERN,
@@ -112,6 +166,8 @@ fun TimiaoRoot(vm: AppViewModel) {
         )
     }
 }
+
+private const val SplitStoreGlobalId = app.timiao.et.split.SplitStore.GLOBAL_ID
 
 private val TabOrder = listOf(Routes.HOME, Routes.PEERS, Routes.NETWORKS, Routes.SETTINGS)
 

@@ -3,10 +3,10 @@ package app.timiao.et.ui.screens
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,15 +15,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,22 +36,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.timiao.et.core.PeerConn
 import app.timiao.et.core.PeerInfo
 import app.timiao.et.ui.AppViewModel
 import app.timiao.et.ui.components.AvatarBadge
@@ -56,28 +61,34 @@ import app.timiao.et.ui.components.EmptyGlassCard
 import app.timiao.et.ui.components.GlassLevel
 import app.timiao.et.ui.components.GlassTextField
 import app.timiao.et.ui.components.InfoRow
+import app.timiao.et.ui.components.OrbButton
 import app.timiao.et.ui.components.PeerRow
 import app.timiao.et.ui.components.PillButton
 import app.timiao.et.ui.components.ScreenHeader
 import app.timiao.et.ui.components.SegmentedGlass
 import app.timiao.et.ui.components.glass
+import app.timiao.et.ui.navigation.Routes
 import app.timiao.et.ui.theme.LocalGlassColors
+import app.timiao.et.ui.util.TopologyLayout
 import app.timiao.et.ui.util.copyToClipboard
 import app.timiao.et.ui.util.costLabel
 import app.timiao.et.ui.util.formatBytes
 import app.timiao.et.ui.util.isRelay
 import app.timiao.et.ui.util.natLabel
+import app.timiao.et.ui.util.stableKey
 import app.timiao.et.ui.util.tunnelLabel
-import androidx.compose.ui.platform.LocalContext
+import app.timiao.et.ui.util.versionLabel
 import java.util.Locale
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.min
-import kotlin.math.sin
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PeersScreen(vm: AppViewModel) {
+fun PeersScreen(
+    vm: AppViewModel,
+    onNavigate: (String) -> Unit = {},
+    /** Reserved slot for node actions wired by the main agent. Rendered at the bottom of the sheet. */
+    actions: @Composable (PeerInfo) -> Unit = {},
+) {
     val status by vm.activeStatus.collectAsStateWithLifecycle()
     val active by vm.activeNetwork.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -86,21 +97,31 @@ fun PeersScreen(vm: AppViewModel) {
     var mode by rememberSaveable { mutableStateOf(0) }
     var filter by rememberSaveable { mutableStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
-    var selected by remember { mutableStateOf<PeerInfo?>(null) }
+    // Store the stable key, not the object: the 1 s poll replaces the PeerInfo list.
+    var selectedKey by remember { mutableStateOf<String?>(null) }
 
-    val filtered = status.peers.filter { peer ->
-        val matchQuery = query.isBlank() ||
-            peer.hostname.contains(query, ignoreCase = true) ||
-            peer.ipv4?.contains(query) == true
-        val matchFilter = when (filter) {
-            1 -> !peer.isRelay()
-            2 -> peer.isRelay()
-            else -> true
+    // derivedStateOf keeps the search/filter work out of the whole screen recomposition.
+    val filtered by remember {
+        derivedStateOf {
+            status.peers.filter { peer ->
+                val matchQuery = query.isBlank() ||
+                    peer.hostname.contains(query, ignoreCase = true) ||
+                    peer.ipv4?.contains(query) == true
+                val matchFilter = when (filter) {
+                    1 -> !peer.isRelay()
+                    2 -> peer.isRelay()
+                    else -> true
+                }
+                matchQuery && matchFilter
+            }
         }
-        matchQuery && matchFilter
     }
     val directCount = status.peers.count { !it.isRelay() }
     val relayCount = status.peers.size - directCount
+    val selectedPeer: PeerInfo? = remember(selectedKey, status.peers) {
+        val key = selectedKey
+        if (key == null) null else status.peers.firstOrNull { it.stableKey() == key }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -111,6 +132,13 @@ fun PeersScreen(vm: AppViewModel) {
             ScreenHeader(
                 title = "节点",
                 subtitle = active?.let { "${it.name} · ${status.peers.size} 只" } ?: "未选择网络",
+                action = {
+                    OrbButton(
+                        icon = Icons.Filled.List,
+                        label = "事件日志",
+                        onClick = { onNavigate(Routes.EVENT_LOG) },
+                    )
+                },
             )
         }
         item {
@@ -148,11 +176,11 @@ fun PeersScreen(vm: AppViewModel) {
                     )
                 }
             } else {
-                items(filtered.size) { index ->
-                    val peer = filtered[index]
+                // Stable peer keys let LazyColumn reuse rows; only changed rows recompose.
+                items(items = filtered, key = { it.stableKey() }) { peer ->
                     PeerRow(
                         peer = peer,
-                        onClick = { selected = peer },
+                        onClick = { selectedKey = peer.stableKey() },
                         onLongClick = {
                             peer.ipv4?.let { copyToClipboard(context, "节点 IP", it) }
                         },
@@ -161,21 +189,17 @@ fun PeersScreen(vm: AppViewModel) {
             }
         } else {
             item {
-                if (filtered.isEmpty()) {
-                    EmptyGlassCard(text = "拓扑为空。")
-                } else {
-                    TopologyCard(
-                        peers = filtered,
-                        myIpv4 = status.myIpv4,
-                        myName = "本机",
-                    )
-                }
+                TopologyCard(
+                    peers = filtered,
+                    myIpv4 = status.myIpv4,
+                    myPeerId = status.node?.peerId,
+                )
             }
         }
 
         item {
             Text(
-                text = "提示：长按节点可复制 IP 地址。",
+                text = "提示：长按节点可复制 IP 地址；右上角打开事件日志。",
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 6.dp),
@@ -183,22 +207,30 @@ fun PeersScreen(vm: AppViewModel) {
         }
     }
 
-    val peer = selected
+    val peer = selectedPeer
     if (peer != null) {
         ModalBottomSheet(
-            onDismissRequest = { selected = null },
+            onDismissRequest = { selectedKey = null },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surface,
         ) {
-            PeerDetail(peer = peer, onCopy = {
-                peer.ipv4?.let { copyToClipboard(context, "节点 IP", it) }
-            })
+            PeerDetail(
+                peer = peer,
+                onCopy = {
+                    peer.ipv4?.let { copyToClipboard(context, "节点 IP", it) }
+                },
+                actions = { actions(peer) },
+            )
         }
     }
 }
 
 @Composable
-private fun PeerDetail(peer: PeerInfo, onCopy: () -> Unit) {
+private fun PeerDetail(
+    peer: PeerInfo,
+    onCopy: () -> Unit,
+    actions: @Composable () -> Unit = {},
+) {
     val g = LocalGlassColors.current
     Column(
         modifier = Modifier
@@ -231,16 +263,40 @@ private fun PeerDetail(peer: PeerInfo, onCopy: () -> Unit) {
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             InfoRow("IP", peer.ipv4 ?: "—")
+            InfoRow("IPv6", peer.ipv6 ?: "—")
             InfoRow("延迟", peer.latencyMs?.let { "${it.toInt()} ms" } ?: "—")
             InfoRow("丢包", peer.lossRate?.let { String.format(Locale.US, "%.1f%%", it) } ?: "—")
             InfoRow("NAT", natLabel(peer.natType))
+            InfoRow("TCP NAT", natLabel(peer.tcpNatType))
             InfoRow("隧道", peer.tunnelLabel())
-            InfoRow("版本", peer.version ?: "—")
-            InfoRow("路由", peer.cost)
+            InfoRow("版本", peer.versionLabel())
+            InfoRow("路由", peer.costLabel())
             InfoRow("发送", formatBytes(peer.txBytes))
             InfoRow("接收", formatBytes(peer.rxBytes))
+            if (peer.isPublicServer) {
+                InfoRow("标记", "公网服务器")
+            }
+            if (peer.avoidRelayData) {
+                InfoRow("标记", "避免中继数据")
+            }
         }
-        Spacer(Modifier.height(16.dp))
+
+        if (peer.conns.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "连接 (${peer.conns.size})",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                color = g.muted,
+            )
+            Spacer(Modifier.height(8.dp))
+            peer.conns.forEachIndexed { index, conn ->
+                ConnCard(index = index, conn = conn)
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+
+        actions()
+        Spacer(Modifier.height(12.dp))
         PillButton(
             text = "复制 IP",
             onClick = onCopy,
@@ -251,127 +307,192 @@ private fun PeerDetail(peer: PeerInfo, onCopy: () -> Unit) {
     }
 }
 
+@Composable
+private fun ConnCard(index: Int, conn: PeerConn) {
+    val g = LocalGlassColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glass(RoundedCornerShape(16.dp), GlassLevel.Subtle)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "连接 ${index + 1}",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (conn.isDefault) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "默认",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = conn.tunnel ?: "—",
+                style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
+                color = g.muted,
+            )
+        }
+        InfoRow("本地", conn.localAddr ?: "—")
+        InfoRow("远端", conn.remoteAddr ?: "—")
+        InfoRow("延迟", conn.latencyMs?.let { "${it.toInt()} ms" } ?: "—")
+        InfoRow("丢包", conn.lossRate?.let { String.format(Locale.US, "%.1f%%", it) } ?: "—")
+        InfoRow("发送", formatBytes(conn.txBytes))
+        InfoRow("接收", formatBytes(conn.rxBytes))
+    }
+}
+
 @OptIn(ExperimentalTextApi::class)
 @Composable
-private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myName: String) {
+private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myPeerId: String?) {
     val g = LocalGlassColors.current
     val accent = MaterialTheme.colorScheme.primary
     val surface = MaterialTheme.colorScheme.surface
     val onSurface = MaterialTheme.colorScheme.onSurface
     val measurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(color = onSurface, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-    val subStyle = TextStyle(color = g.muted, fontSize = 8.5.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+    val labelStyle = TextStyle(color = onSurface, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+    val subStyle = TextStyle(color = g.muted, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
     val peerPalette = listOf(
         Color(0xFF7CC6A4), Color(0xFF8FB6FF), Color(0xFFC39BFF),
         Color(0xFFF0A96B), Color(0xFFE58FA8), Color(0xFF74B9C9),
     )
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .glass(RoundedCornerShape(26.dp), GlassLevel.Regular)
-            .padding(12.dp),
-    ) {
-        Canvas(
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val widthDp = maxWidth.value
+        // Recomputed once per poll (or width change); positions are pure data and unit tested.
+        val layout = remember(peers, myIpv4, myPeerId, widthDp) {
+            TopologyLayout.layout(peers, myIpv4, myPeerId, widthDp)
+        }
+        val labelMaxPx = with(androidx.compose.ui.platform.LocalDensity.current) {
+            (TopologyLayout.CELL_W_DP - 8f).dp.roundToPx()
+        }
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1.05f),
+                .glass(RoundedCornerShape(26.dp), GlassLevel.Regular)
+                .padding(12.dp),
         ) {
-            val center = Offset(size.width / 2f, size.height / 2f)
-            val orbit = min(size.width, size.height) / 2f - 56.dp.toPx()
-            val nodeR = 20.dp.toPx()
-            val centerR = 28.dp.toPx()
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(layout.heightDp.dp),
+            ) {
+                val nodeR = TopologyLayout.NODE_R_DP.dp.toPx()
+                val centerR = nodeR + 5.dp.toPx()
+                val nodesByKey = layout.nodes.associateBy { it.key }
 
-            peers.forEachIndexed { index, peer ->
-                val angle = -PI / 2 + 2 * PI * index / peers.size
-                val px = center.x + (orbit * cos(angle)).toFloat()
-                val py = center.y + (orbit * sin(angle)).toFloat()
-                val peerPos = Offset(px, py)
-                val relay = peer.isRelay()
-                drawLine(
-                    color = if (relay) g.muted.copy(alpha = 0.55f) else accent.copy(alpha = 0.5f),
-                    start = center,
-                    end = peerPos,
-                    strokeWidth = if (relay) 1.6.dp.toPx() else 2.dp.toPx(),
-                    pathEffect = if (relay) {
-                        PathEffect.dashPathEffect(floatArrayOf(9.dp.toPx(), 7.dp.toPx()))
+                layout.edges.forEach { edge ->
+                    val fromNode = nodesByKey[edge.fromKey] ?: return@forEach
+                    val toNode = nodesByKey[edge.toKey] ?: return@forEach
+                    val from = Offset(fromNode.xDp.dp.toPx(), fromNode.yDp.dp.toPx())
+                    val to = Offset(toNode.xDp.dp.toPx(), toNode.yDp.dp.toPx())
+                    val midY = (from.y + to.y) / 2f
+                    val path = Path().apply {
+                        moveTo(from.x, from.y + nodeR)
+                        cubicTo(from.x, midY, to.x, midY, to.x, to.y - nodeR)
+                    }
+                    drawPath(
+                        path = path,
+                        color = if (edge.isRelay) g.muted.copy(alpha = 0.55f) else accent.copy(alpha = 0.5f),
+                        style = Stroke(
+                            width = if (edge.isRelay) 1.4.dp.toPx() else 2.dp.toPx(),
+                            pathEffect = if (edge.isRelay) {
+                                PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx()))
+                            } else {
+                                null
+                            },
+                        ),
+                    )
+                }
+
+                layout.nodes.forEach { node ->
+                    val center = Offset(node.xDp.dp.toPx(), node.yDp.dp.toPx())
+                    if (node.isRoot) {
+                        drawCircle(surface.copy(alpha = 0.95f), radius = centerR + 2.dp.toPx(), center = center)
+                        drawCircle(accent.copy(alpha = 0.18f), radius = centerR + 2.dp.toPx(), center = center)
+                        drawCircle(accent, radius = centerR, center = center, style = Stroke(2.dp.toPx()))
+                        val earSize = 9.dp.toPx()
+                        val leftEar = Path().apply {
+                            moveTo(center.x - centerR * 0.62f, center.y - centerR * 0.55f)
+                            lineTo(center.x - centerR * 0.8f, center.y - centerR - earSize)
+                            lineTo(center.x - centerR * 0.2f, center.y - centerR * 0.75f)
+                            close()
+                        }
+                        val rightEar = Path().apply {
+                            moveTo(center.x + centerR * 0.62f, center.y - centerR * 0.55f)
+                            lineTo(center.x + centerR * 0.8f, center.y - centerR - earSize)
+                            lineTo(center.x + centerR * 0.2f, center.y - centerR * 0.75f)
+                            close()
+                        }
+                        drawPath(leftEar, accent)
+                        drawPath(rightEar, accent)
                     } else {
-                        null
-                    },
-                )
-            }
+                        val color = peerPalette[abs(node.key.hashCode()) % peerPalette.size]
+                        drawCircle(surface.copy(alpha = 0.95f), radius = nodeR, center = center)
+                        drawCircle(color.copy(alpha = 0.30f), radius = nodeR, center = center)
+                        drawCircle(
+                            color = color,
+                            radius = nodeR,
+                            center = center,
+                            style = Stroke(1.5.dp.toPx()),
+                        )
+                    }
 
-            peers.forEachIndexed { index, peer ->
-                val angle = -PI / 2 + 2 * PI * index / peers.size
-                val px = center.x + (orbit * cos(angle)).toFloat()
-                val py = center.y + (orbit * sin(angle)).toFloat()
-                val color = peerPalette[(peer.hostname.hashCode().let { if (it < 0) -it else it }) % peerPalette.size]
-                drawCircle(surface.copy(alpha = 0.92f), radius = nodeR, center = Offset(px, py))
-                drawCircle(color, radius = nodeR - 3.dp.toPx(), center = Offset(px, py))
-                drawCircle(color, radius = nodeR, center = Offset(px, py), style = Stroke(1.5.dp.toPx()))
-                val text = measurer.measure(
-                    peer.hostname,
-                    style = labelStyle,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                drawText(
-                    textLayoutResult = text,
-                    topLeft = Offset(px - text.size.width / 2f, py + nodeR + 5.dp.toPx()),
-                )
-                val latencyText = measurer.measure(
-                    peer.latencyMs?.let { "${it.toInt()} ms" } ?: "—",
-                    style = subStyle,
-                    maxLines = 1,
-                )
-                drawText(
-                    textLayoutResult = latencyText,
-                    topLeft = Offset(px - latencyText.size.width / 2f, py + nodeR + 19.dp.toPx()),
+                    val label = measurer.measure(
+                        text = node.label,
+                        style = labelStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        constraints = Constraints(maxWidth = labelMaxPx),
+                    )
+                    drawText(
+                        textLayoutResult = label,
+                        topLeft = Offset(center.x - label.size.width / 2f, center.y + nodeR + 6.dp.toPx()),
+                    )
+                    val sub = measurer.measure(
+                        text = node.sub,
+                        style = subStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        constraints = Constraints(maxWidth = labelMaxPx),
+                    )
+                    drawText(
+                        textLayoutResult = sub,
+                        topLeft = Offset(center.x - sub.size.width / 2f, center.y + nodeR + 20.dp.toPx()),
+                    )
+                }
+            }
+            if (peers.isEmpty()) {
+                Text(
+                    text = "还没有节点。连接后显示。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = g.muted,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                 )
             }
-
-            // Center = this device, with a tiny cat-ear silhouette.
-            drawCircle(surface.copy(alpha = 0.95f), radius = centerR + 2.dp.toPx(), center = center)
-            drawCircle(accent.copy(alpha = 0.18f), radius = centerR + 2.dp.toPx(), center = center)
-            drawCircle(accent, radius = centerR, center = center, style = Stroke(2.dp.toPx()))
-            val earSize = 9.dp.toPx()
-            val leftEar = Path().apply {
-                moveTo(center.x - centerR * 0.62f, center.y - centerR * 0.55f)
-                lineTo(center.x - centerR * 0.8f, center.y - centerR - earSize)
-                lineTo(center.x - centerR * 0.2f, center.y - centerR * 0.75f)
-                close()
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(14.dp, 2.dp).glass(RoundedCornerShape(2.dp), GlassLevel.Subtle))
+                Spacer(Modifier.width(5.dp))
+                Text("直连", style = MaterialTheme.typography.labelSmall, color = g.muted)
+                Spacer(Modifier.width(15.dp))
+                Text("┄", style = MaterialTheme.typography.labelSmall, color = g.muted)
+                Spacer(Modifier.width(5.dp))
+                Text("中继", style = MaterialTheme.typography.labelSmall, color = g.muted)
             }
-            val rightEar = Path().apply {
-                moveTo(center.x + centerR * 0.62f, center.y - centerR * 0.55f)
-                lineTo(center.x + centerR * 0.8f, center.y - centerR - earSize)
-                lineTo(center.x + centerR * 0.2f, center.y - centerR * 0.75f)
-                close()
-            }
-            drawPath(leftEar, accent)
-            drawPath(rightEar, accent)
-            val myLabel = measurer.measure(myName, style = labelStyle.copy(fontSize = 11.sp), maxLines = 1)
-            drawText(
-                textLayoutResult = myLabel,
-                topLeft = Offset(center.x - myLabel.size.width / 2f, center.y - 4.dp.toPx()),
+            Text(
+                text = "按 next_hop 分层：中继画在下一跳节点之后。",
+                style = MaterialTheme.typography.labelSmall,
+                color = g.muted,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             )
-            val ipLabel = measurer.measure(myIpv4 ?: "未连接", style = subStyle, maxLines = 1)
-            drawText(
-                textLayoutResult = ipLabel,
-                topLeft = Offset(center.x - ipLabel.size.width / 2f, center.y + centerR + 6.dp.toPx()),
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(14.dp, 2.dp).glass(RoundedCornerShape(2.dp), GlassLevel.Subtle))
-            Spacer(Modifier.width(5.dp))
-            Text("直连", style = MaterialTheme.typography.labelSmall, color = g.muted)
-            Spacer(Modifier.width(15.dp))
-            Text("┄", style = MaterialTheme.typography.labelSmall, color = g.muted)
-            Spacer(Modifier.width(5.dp))
-            Text("中继", style = MaterialTheme.typography.labelSmall, color = g.muted)
         }
     }
 }
