@@ -62,23 +62,29 @@ fun HomeScreen(
     val context = LocalContext.current
     val g = LocalGlassColors.current
 
-    val statusTitle = when (status.state) {
-        LinkState.Idle -> "未连接"
-        LinkState.Connecting -> "正在连接…"
-        LinkState.Connected -> "已连接 ${active?.name.orEmpty()}"
-        LinkState.Error -> "连接出错"
+    val reconnecting = status.reconnecting
+    val statusTitle = when {
+        reconnecting -> "正在重连…"
+        status.state == LinkState.Idle -> "未连接"
+        status.state == LinkState.Connecting -> "正在连接…"
+        status.state == LinkState.Connected -> "已连接 ${active?.name.orEmpty()}"
+        else -> "连接出错"
     }
-    val statusSub = when (status.state) {
-        LinkState.Idle -> if (active == null) "先创建一个网络吧" else "小猫在睡觉，点按钮唤醒天线"
-        LinkState.Connecting -> "竖起天线找节点"
-        LinkState.Connected -> "${status.myIpv4 ?: "—"} · ${formatUptime(status.uptimeSec)}"
-        LinkState.Error -> status.error ?: "配置有问题，点开看原因"
+    val statusSub = when {
+        reconnecting -> "网络中断，正在重连"
+        status.state == LinkState.Idle ->
+            if (active == null) "先创建一个网络吧" else "小猫在睡觉，点按钮唤醒天线"
+        status.state == LinkState.Connecting -> "竖起天线找节点"
+        status.state == LinkState.Connected ->
+            "${status.myIpv4 ?: "—"} · ${formatUptime(status.uptimeSec)}"
+        else -> status.error ?: "配置有问题，点开看原因"
     }
-    val buttonText = when (status.state) {
-        LinkState.Idle -> "连接"
-        LinkState.Connecting -> "取消连接"
-        LinkState.Connected -> "断开连接"
-        LinkState.Error -> "重试"
+    val buttonText = when {
+        reconnecting -> "断开连接"
+        status.state == LinkState.Idle -> "连接"
+        status.state == LinkState.Connecting -> "取消连接"
+        status.state == LinkState.Connected -> "断开连接"
+        else -> "重试"
     }
 
     LazyColumn(
@@ -128,7 +134,7 @@ fun HomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 CatMascot(
-                    state = status.state,
+                    state = if (reconnecting) LinkState.Connecting else status.state,
                     modifier = Modifier.size(width = 208.dp, height = 184.dp),
                 )
                 Text(

@@ -8,6 +8,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -23,6 +26,9 @@ import app.timiao.et.split.SplitStore
 import app.timiao.et.split.applyAppFilter
 import app.timiao.et.core.TunMerge
 import app.timiao.et.core.TunSpec
+import app.timiao.et.traffic.TrafficDecision
+import app.timiao.et.ui.screens.currentNetworkKind
+import java.time.YearMonth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -46,12 +52,20 @@ class TimiaoVpnService : VpnService() {
     @Volatile private var commandSeen = false
 
     private val engine get() = (application as TimiaoApplication).container.nativeEngine
+    private val trafficRecorder get() = (application as TimiaoApplication).container.trafficRecorder
+
+    /** Default-network listener that applies the mobile-data policy while a tunnel runs. */
+    private var trafficCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun onCreate() {
         super.onCreate()
         VpnTunProvider.service = this
+        // The engine only reads this. VPN-transport networks are ignored so our own TUN
+        // cannot make the device look online after the physical link is gone.
+        engine.defaultNetworkAvailable = { hasPhysicalNetwork() }
         ensureChannel()
         startForegroundCompat(buildNotification(null, 0))
+        registerTrafficPolicyCallback()
         // Rebuild the running TUN when the split policy changes, so the new app filter
         // takes effect immediately instead of on the next connect.
         splitObserver = SplitStore(this).observe {
@@ -80,6 +94,13 @@ class TimiaoVpnService : VpnService() {
         Log.i(TAG, "command ${intent?.action} id=${intent?.getStringExtra(EXTRA_ID)} active=${synchronized(activeIds) { activeIds.toList() }}")
         when (intent?.action) {
             ACTION_START -> intent.getStringExtra(EXTRA_ID)?.let { id ->
+                if (!allowTrafficStart()) {
+                    if (synchronized(activeIds) { activeIds.isEmpty() }) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf()
+                    }
+                    return START_NOT_STICKY
+                }
                 synchronized(activeIds) { activeIds += id }
                 ServiceState.setLast(this, id)
                 scope.launch {
@@ -186,12 +207,118 @@ class TimiaoVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        trafficCallback?.let { callback ->
+            runCatching {
+                getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(callback)
+            }
+        }
+        trafficCallback = null
         VpnTunProvider.service = null
         splitObserver?.let { SplitStore(this).stopObserving(it) }
         splitObserver = null
         closeTun()
         scope.cancel()
         super.onDestroy()
+    }
+
+    /** True when the traffic policy allows a new tunnel on the current physical network. */
+    private fun allowTrafficStart(): Boolean {
+        val kind = currentNetworkKind(getSystemService(ConnectivityManager::class.java))
+        return when (trafficRecorder.decision(kind)) {
+            TrafficDecision.Block -> {
+                notifyPolicyBlocked()
+                false
+            }
+            TrafficDecision.Warn -> {
+                notifyWarnOnce()
+                true
+            }
+            TrafficDecision.Allow -> {
+                // A previous "paused on mobile" notice is stale once a start is allowed.
+                notificationManager().cancel(POLICY_NOTIF_ID)
+                true
+            }
+        }
+    }
+
+    /** Applies an already-running tunnel's policy when the default network changes. */
+    private fun registerTrafficPolicyCallback() {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                scope.launch { enforceTrafficPolicy() }
+            }
+
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                scope.launch { enforceTrafficPolicy() }
+            }
+
+            override fun onLost(network: Network) {
+                scope.launch { enforceTrafficPolicy() }
+            }
+        }
+        runCatching { cm.registerDefaultNetworkCallback(callback) }
+            .onSuccess { trafficCallback = callback }
+    }
+
+    private suspend fun enforceTrafficPolicy() {
+        val runningIds = synchronized(activeIds) { activeIds.toList() }
+        if (runningIds.isEmpty()) return
+        val kind = currentNetworkKind(getSystemService(ConnectivityManager::class.java))
+        when (trafficRecorder.decision(kind)) {
+            TrafficDecision.Block -> {
+                runningIds.forEach { id ->
+                    runCatching { engine.stop(id) }
+                    synchronized(activeIds) { activeIds -= id }
+                }
+                closeTun()
+                notifyPolicyBlocked()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
+            TrafficDecision.Warn -> notifyWarnOnce()
+            TrafficDecision.Allow -> notificationManager().cancel(POLICY_NOTIF_ID)
+        }
+    }
+
+    /** Warn at most once per calendar month, as the traffic screen promises. */
+    private fun notifyWarnOnce() {
+        val prefs = getSharedPreferences(POLICY_PREFS, MODE_PRIVATE)
+        val month = YearMonth.now().toString()
+        if (prefs.getString(KEY_WARN_MONTH, null) == month) return
+        prefs.edit().putString(KEY_WARN_MONTH, month).apply()
+        notifyPolicy("移动数据提醒", "本月移动数据已超过提醒阈值（可在流量统计中修改）")
+    }
+
+    private fun notifyPolicyBlocked() {
+        notifyPolicy("EasyTier 已暂停", MOBILE_BLOCKED_TEXT)
+    }
+
+    private fun notifyPolicy(title: String, text: String) {
+        val open = PendingIntent.getActivity(
+            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(this, CHANNEL)
+            .setSmallIcon(R.drawable.ic_stat_idle)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setAutoCancel(true)
+            .setContentIntent(open)
+            .build()
+        notificationManager().notify(POLICY_NOTIF_ID, notification)
+    }
+
+    /** True when a physical (non-VPN) network with INTERNET exists. */
+    @Suppress("DEPRECATION")
+    private fun hasPhysicalNetwork(): Boolean {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return true
+        return runCatching {
+            cm.allNetworks.any { network ->
+                val caps = cm.getNetworkCapabilities(network) ?: return@any false
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+            }
+        }.getOrDefault(true)
     }
 
     private fun notificationManager() = getSystemService(NotificationManager::class.java)
@@ -211,15 +338,21 @@ class TimiaoVpnService : VpnService() {
             Intent(this, TimiaoVpnService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE,
         )
-        val connected = s?.state == LinkState.Connected
-        val text = if (connected) {
-            "${s?.myIpv4 ?: ""} · ↑${rate(s?.txBps ?: 0)} ↓${rate(s?.rxBps ?: 0)} · ${s?.peers?.size ?: 0}"
-        } else {
-            getString(R.string.notif_connecting)
+        val reconnecting = s?.reconnecting == true
+        val connected = s?.state == LinkState.Connected && !reconnecting
+        val title = when {
+            reconnecting -> "网络中断，正在重连"
+            connected -> getString(R.string.notif_connected)
+            else -> getString(R.string.app_name)
+        }
+        val text = when {
+            reconnecting -> "网络中断，正在重连"
+            connected -> "${s?.myIpv4 ?: ""} · ↑${rate(s?.txBps ?: 0)} ↓${rate(s?.rxBps ?: 0)} · ${s?.peers?.size ?: 0}"
+            else -> getString(R.string.notif_connecting)
         }
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(if (connected) R.drawable.ic_stat_connected else R.drawable.ic_stat_idle)
-            .setContentTitle(getString(if (connected) R.string.notif_connected else R.string.app_name))
+            .setContentTitle(title)
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -249,6 +382,11 @@ class TimiaoVpnService : VpnService() {
         const val EXTRA_ID = "id"
         private const val CHANNEL = "connection"
         private const val NOTIF_ID = 1
+        private const val POLICY_NOTIF_ID = 2
+        private const val POLICY_PREFS = "traffic_policy"
+        private const val KEY_WARN_MONTH = "warn_month"
+        private const val MOBILE_BLOCKED_TEXT =
+            "移动数据下已暂停 EasyTier（可在流量统计中关闭此限制）"
         private const val TAG = "TimiaoVpn"
 
         /** Intent for the system VPN consent dialog, or null when consent is already granted. */

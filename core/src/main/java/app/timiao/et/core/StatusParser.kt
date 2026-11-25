@@ -29,6 +29,9 @@ internal object StatusParser {
     /** Rate smoothing factor. The poll window is one second. */
     private const val RATE_ALPHA = 0.4
 
+    /** A freshly started instance stays in "connecting" until this many seconds have passed. */
+    private const val STARTUP_GRACE_SEC = 8L
+
     private val errorEvents = setOf(
         "TunDeviceError",
         "ListenerAddFailed",
@@ -64,7 +67,36 @@ internal object StatusParser {
         return (root[instanceName] ?: root.values.firstOrNull()) as? JsonObject
     }
 
-    fun parse(text: String, instanceName: String, uptimeSec: Long): NetworkStatus? {
+    /**
+     * Parses one instance entry.
+     *
+     * Connection state rules:
+     * - not running -> [LinkState.Error];
+     * - system default network unavailable -> reconnecting
+     *   ([LinkState.Connecting] + [NetworkStatus.reconnecting]), even if the kernel still
+     *   lists stale peers;
+     * - at least one peer -> [LinkState.Connected];
+     * - no peers, under [STARTUP_GRACE_SEC] -> [LinkState.Connecting];
+     * - no peers, no server configured (isolated network) -> [LinkState.Connected],
+     *   because there is nothing to reach;
+     * - no peers, a peer was seen recently ([peerSeenRecently]) -> [LinkState.Connected],
+     *   which keeps a short tunnel blip from flipping the UI;
+     * - otherwise (server configured but no peer) -> reconnecting.
+     *
+     * Tradeoff: the kernel does not report a server "heartbeat" that outlives the route
+     * table, so when the state is ambiguous we trust the system default network. With a
+     * physical network up but a firewall dropping the server, the UI can stay "connected"
+     * until the peer grace window ends. The e2e case (mobile data and Wi-Fi off) is always
+     * detected because the default network disappears.
+     */
+    fun parse(
+        text: String,
+        instanceName: String,
+        uptimeSec: Long,
+        networkAvailable: Boolean = true,
+        hasConfiguredPeers: Boolean = true,
+        peerSeenRecently: Boolean = false,
+    ): NetworkStatus? {
         val entry = entryOf(text, instanceName) ?: return null
 
         val running = entry.bool("running") ?: false
@@ -101,8 +133,23 @@ internal object StatusParser {
             routes.values.mapNotNull { route -> toPeer(route, null) }
         }
 
+        val hasPeers = peers.isNotEmpty()
+        val reconnecting = !networkAvailable || (!hasPeers && when {
+            uptimeSec < STARTUP_GRACE_SEC -> false
+            peerSeenRecently -> false
+            !hasConfiguredPeers -> false
+            else -> true
+        })
+        val state = when {
+            !networkAvailable -> LinkState.Connecting
+            hasPeers -> LinkState.Connected
+            reconnecting -> LinkState.Connecting
+            uptimeSec < STARTUP_GRACE_SEC -> LinkState.Connecting
+            else -> LinkState.Connected
+        }
+
         return NetworkStatus(
-            state = LinkState.Connected,
+            state = state,
             myIpv4 = myIpv4,
             peers = peers,
             txBps = 0,
@@ -111,6 +158,7 @@ internal object StatusParser {
             error = null,
             node = node,
             events = events,
+            reconnecting = reconnecting,
         )
     }
 

@@ -571,6 +571,165 @@ class JniEngineTest {
     }
 
     @Test
+    fun rejectsSecondNetworkWithOverlappingStaticSubnet() = runBlocking {
+        val bridge = RecordingBridge()
+        val tun = RecordingMultiTun()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val engine = JniEngine(
+            configs = FakeConfigRepository(),
+            tunProvider = tun,
+            bridge = bridge,
+            scope = scope,
+            pollIntervalMs = 10,
+        )
+        val a = sampleNetworkConfig().copy(
+            instanceName = "a",
+            dhcp = false,
+            ipv4 = "10.126.126.1/24",
+        )
+        val b = sampleNetworkConfig().copy(
+            instanceName = "b",
+            networkName = "second",
+            dhcp = false,
+            ipv4 = "10.126.126.9/24",
+        )
+
+        try {
+            engine.start(a)
+            var message: String? = null
+            try {
+                engine.start(b)
+            } catch (e: IllegalStateException) {
+                message = e.message
+            }
+
+            assertTrue(message!!.contains("与正在运行的「${a.networkName}」网段重叠（10.126.126.0/24）"))
+            assertTrue(message.contains("请先断开它或修改网段"))
+            assertEquals(LinkState.Error, engine.status.value.getValue("b").state)
+            assertEquals(message, engine.status.value.getValue("b").error)
+            // The kernel instance for b never ran and never attached to the shared TUN.
+            assertEquals(1, bridge.calls.count { it == "runNetworkInstance" })
+            assertTrue(bridge.calls.none { it.startsWith("setTunFd:b") })
+        } finally {
+            engine.close()
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun rejectsDhcpNetworkWhenAssignedAddressOverlapsAtStartup() = runBlocking {
+        val bJson = """
+            {
+              "a": {
+                "my_node_info": {"virtual_ipv4": {"address": {"addr": 176061953}, "network_length": 24}},
+                "running": true
+              },
+              "b": {
+                "my_node_info": {"virtual_ipv4": {"address": {"addr": 176061961}, "network_length": 24}},
+                "running": true
+              }
+            }
+        """.trimIndent()
+        val bridge = RecordingBridge(json = bJson)
+        val tun = RecordingMultiTun()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val engine = JniEngine(
+            configs = FakeConfigRepository(),
+            tunProvider = tun,
+            bridge = bridge,
+            scope = scope,
+            pollIntervalMs = 10,
+            maxDhcpAttempts = 2,
+        )
+        val a = sampleNetworkConfig().copy(
+            instanceName = "a",
+            dhcp = false,
+            ipv4 = "10.126.126.1/24",
+        )
+        val b = sampleNetworkConfig().copy(
+            instanceName = "b",
+            networkName = "dhcp-b",
+            dhcp = true,
+            ipv4 = null,
+        )
+
+        try {
+            engine.start(a)
+            var message: String? = null
+            try {
+                engine.start(b)
+            } catch (e: IllegalStateException) {
+                message = e.message
+            }
+
+            assertTrue(message!!.contains("与正在运行的「${a.networkName}」网段重叠（10.126.126.0/24）"))
+            assertEquals(LinkState.Error, engine.status.value.getValue("b").state)
+            assertTrue(bridge.calls.contains("deleteNetworkInstance:b"))
+            assertTrue(bridge.calls.none { it.startsWith("setTunFd:b") })
+        } finally {
+            engine.close()
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun lateDhcpOverlapStopsTheLaterNetworkAndReportsIt() = runBlocking {
+        val bJson = """
+            {
+              "a": {
+                "my_node_info": {"virtual_ipv4": {"address": {"addr": 176061953}, "network_length": 24}},
+                "running": true
+              },
+              "b": {
+                "my_node_info": {"virtual_ipv4": {"address": {"addr": 176061961}, "network_length": 24}},
+                "running": true
+              }
+            }
+        """.trimIndent()
+        val bridge = RecordingBridge(json = null)
+        val tun = RecordingMultiTun()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val engine = JniEngine(
+            configs = FakeConfigRepository(),
+            tunProvider = tun,
+            bridge = bridge,
+            scope = scope,
+            pollIntervalMs = 10,
+            maxDhcpAttempts = 1,
+        )
+        val a = sampleNetworkConfig().copy(
+            instanceName = "a",
+            dhcp = false,
+            ipv4 = "10.126.126.1/24",
+        )
+        val b = sampleNetworkConfig().copy(
+            instanceName = "b",
+            networkName = "dhcp-b",
+            dhcp = true,
+            ipv4 = null,
+        )
+
+        try {
+            engine.start(a)
+            engine.start(b) // no DHCP address yet, so no TUN spec
+            bridge.json = bJson
+
+            val failed = withTimeout(3_000) {
+                engine.status.first { it["b"]?.state == LinkState.Error }
+            }
+            val status = failed.getValue("b")
+            assertTrue(status.error!!.contains("与正在运行的「${a.networkName}」网段重叠（10.126.126.0/24）"))
+            assertTrue(bridge.calls.contains("deleteNetworkInstance:b"))
+            // The first network keeps running.
+            assertTrue(engine.status.value.getValue("a").state != LinkState.Error)
+            assertTrue(tun.merged.last().addresses.any { it.address == "10.126.126.1" })
+        } finally {
+            engine.close()
+            scope.cancel()
+        }
+    }
+
+    @Test
     fun reportsNativeFailure() = runBlocking {
         val bridge = RecordingBridge(runResult = -1)
         val engine = JniEngine(

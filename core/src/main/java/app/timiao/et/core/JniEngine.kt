@@ -127,6 +127,38 @@ public object TunMerge {
         return normalizedRoute(address, prefix)
     }
 
+    /**
+     * True when two IPv4 or IPv6 CIDRs share at least one address. Different address
+     * families never overlap. Invalid input returns false.
+     */
+    public fun cidrOverlap(a: String, b: String): Boolean {
+        val (addressA, prefixA) = parseInet(a) ?: return false
+        val (addressB, prefixB) = parseInet(b) ?: return false
+        val bytesA = addressBytes(addressA) ?: return false
+        val bytesB = addressBytes(addressB) ?: return false
+        if (bytesA.size != bytesB.size) return false
+        val bits = minOf(prefixA, prefixB)
+        for (i in 0 until bits / 8) {
+            if (bytesA[i] != bytesB[i]) return false
+        }
+        val rest = bits % 8
+        if (rest == 0) return true
+        val mask = (0xFF shl (8 - rest)) and 0xFF
+        return (bytesA[bits / 8].toInt() and mask) == (bytesB[bits / 8].toInt() and mask)
+    }
+
+    /** Canonical `network/prefix` for messages, or null when [cidr] is invalid. */
+    public fun normalizedCidr(cidr: String): String? =
+        parseCidr(cidr)?.let { (network, prefix) -> "$network/$prefix" }
+
+    private fun addressBytes(address: String): ByteArray? = when (family(address)) {
+        4 -> address.split('.').map { it.toInt().toByte() }.toByteArray()
+        6 -> runCatching { InetAddress.getByName(address).address }
+            .getOrNull()
+            ?.takeIf { it.size == 16 }
+        else -> null
+    }
+
     private fun family(address: String): Int {
         if (address.contains(':')) {
             val valid = address.all { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' || it == ':' || it == '.' }
@@ -157,10 +189,48 @@ public object TunMerge {
                     masked[i] = (bytes[i].toInt() and (if (take == 0) 0 else (0xFF shl (8 - take)) and 0xFF)).toByte()
                     bits -= take
                 }
-                InetAddress.getByAddress(masked).hostAddress to prefix
+                ipv6Text(masked) to prefix
             }
             else -> null
         }
+    }
+
+    /** RFC 5952 compression, so messages show `2001:db8::/32` instead of eight zero groups. */
+    private fun ipv6Text(bytes: ByteArray): String {
+        val groups = IntArray(8) { index ->
+            ((bytes[index * 2].toInt() and 0xFF) shl 8) or (bytes[index * 2 + 1].toInt() and 0xFF)
+        }
+        var bestStart = -1
+        var bestLength = 0
+        var start = -1
+        var length = 0
+        for (i in groups.indices) {
+            if (groups[i] == 0) {
+                if (start < 0) start = i
+                length++
+                if (length > bestLength) {
+                    bestStart = start
+                    bestLength = length
+                }
+            } else {
+                start = -1
+                length = 0
+            }
+        }
+        val compress = bestLength >= 2
+        val result = StringBuilder()
+        var i = 0
+        while (i < groups.size) {
+            if (compress && i == bestStart) {
+                result.append("::")
+                i += bestLength
+                continue
+            }
+            if (result.isNotEmpty() && !result.endsWith(":")) result.append(':')
+            result.append(Integer.toHexString(groups[i]))
+            i++
+        }
+        return result.toString().ifEmpty { "::" }
     }
 
     /** Peer proxy CIDRs in one instance from `collectNetworkInfos` JSON. */
@@ -214,7 +284,17 @@ public class JniEngine(
     private class Running(val config: NetworkConfig, val startedAt: Long) {
         var previous: NetworkStatus? = null
         var previousAt: Long = startedAt
+
+        /** Last poll time that saw at least one peer. 0 when no peer was ever seen. */
+        var lastPeerAt: Long = 0L
     }
+
+    /**
+     * Set by the VPN service. True when a physical (non-VPN) network with INTERNET exists.
+     * The engine stays UI-agnostic, so tests keep the default true.
+     */
+    @Volatile
+    public var defaultNetworkAvailable: () -> Boolean = { true }
 
     private val _status = MutableStateFlow<Map<String, NetworkStatus>>(emptyMap())
     override val status: StateFlow<Map<String, NetworkStatus>> = _status.asStateFlow()
@@ -249,6 +329,10 @@ public class JniEngine(
         val key = config.id
         var nativeStarted = false
         try {
+            // Static addresses are known before the kernel starts, so reject early.
+            if (!config.dhcp) {
+                rejectOverlap(key, virtualCidrs(config))
+            }
             val toml = TomlCodec.exportToml(config)
             check(bridge.parseConfig(toml), "parseConfig")
             check(bridge.runNetworkInstance(toml), "runNetworkInstance")
@@ -269,6 +353,8 @@ public class JniEngine(
             }
             if (!noTun && addressInfo != null) {
                 val (address, prefix) = addressInfo!!
+                // DHCP address is only known now. Reject the later starter on a clash.
+                rejectOverlap(key, listOfNotNull("$address/$prefix") + ipv6Cidrs(config))
                 val spec = specFor(config, address, prefix)
                 tunMutex.withLock {
                     specs[key] = spec
@@ -377,15 +463,21 @@ public class JniEngine(
         }
     }
 
-    /** Reconciles address and peer proxy routes reported by the kernel into the TUN spec. */
-    private suspend fun reconcileSpec(id: String, reportedIp: String?, runtimeRoutes: List<String>) {
-        val config = running[id]?.config ?: return
-        tunMutex.withLock {
+    /**
+     * Reconciles address and peer proxy routes reported by the kernel into the TUN spec.
+     * Returns a Chinese error message when a DHCP address overlaps another running network;
+     * the caller then stops this instance.
+     */
+    private suspend fun reconcileSpec(id: String, reportedIp: String?, runtimeRoutes: List<String>): String? {
+        val config = running[id]?.config ?: return null
+        return tunMutex.withLock {
             val spec = specs[id]
             if (spec == null) {
                 // A DHCP address can arrive after the start attempt timed out.
                 val (address, prefix) = reportedIp?.let { runCatching { parseInet(it) }.getOrNull() }
-                    ?: return@withLock
+                    ?: return@withLock null
+                overlapMessage(id, listOf("$address/$prefix") + ipv6Cidrs(config))
+                    ?.let { return@withLock it }
                 specs[id] = specFor(config, address, prefix)
                 try {
                     rebuildTunLocked(requiredInstance = config.instanceName)
@@ -393,20 +485,22 @@ public class JniEngine(
                     specs.remove(id)
                     throw e
                 }
-                return@withLock
+                return@withLock null
             }
             var next = spec
             if (reportedIp != null) {
                 val (address, prefix) = runCatching { parseInet(reportedIp) }.getOrNull()
-                    ?: return@withLock
+                    ?: return@withLock null
                 if (address != spec.address || prefix != spec.prefix) {
+                    overlapMessage(id, listOf("$address/$prefix") + ipv6Cidrs(config))
+                        ?.let { return@withLock it }
                     next = next.copy(address = address, prefix = prefix)
                 }
             }
             if (runtimeRoutes != spec.runtimeRoutes) {
                 next = next.copy(runtimeRoutes = runtimeRoutes)
             }
-            if (next == spec) return@withLock
+            if (next == spec) return@withLock null
             specs[id] = next
             try {
                 rebuildTunLocked(requiredInstance = spec.instanceName)
@@ -414,6 +508,7 @@ public class JniEngine(
                 specs[id] = spec
                 throw e
             }
+            null
         }
     }
 
@@ -430,6 +525,76 @@ public class JniEngine(
     /** Android TUN default is 1300; only an explicit non-default kernel MTU overrides it. */
     private fun tunMtu(config: NetworkConfig): Int =
         if (config.flags.mtu == DEFAULT_KERNEL_MTU) TunMerge.DEFAULT_MTU else config.flags.mtu
+
+    /**
+     * Rejects a start when the new network's virtual CIDRs overlap a running network.
+     * The message names the owner and its network address. Must not hold [tunMutex].
+     */
+    private suspend fun rejectOverlap(id: String, cidrs: List<String>) {
+        if (cidrs.isEmpty()) return
+        val message = tunMutex.withLock { overlapMessage(id, cidrs) }
+        if (message != null) throw IllegalStateException(message)
+    }
+
+    /** Caller must hold [tunMutex] when [specs] can change concurrently. */
+    private fun overlapMessage(id: String, candidateCidrs: List<String>): String? {
+        if (candidateCidrs.isEmpty()) return null
+        for ((otherId, other) in running) {
+            if (otherId == id) continue
+            val others = runningCidrs(otherId, other.config)
+            for (candidate in candidateCidrs) {
+                for (runningCidr in others) {
+                    if (TunMerge.cidrOverlap(candidate, runningCidr)) {
+                        val display = TunMerge.normalizedCidr(runningCidr) ?: runningCidr
+                        val name = other.config.networkName.ifBlank { other.config.instanceName }
+                        return "与正在运行的「$name」网段重叠（$display），请先断开它或修改网段"
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    private fun runningCidrs(id: String, config: NetworkConfig): List<String> {
+        val spec = specs[id]
+        if (spec != null) return listOf("${spec.address}/${spec.prefix}") + spec.ipv6Addresses
+        // A DHCP network without a TUN spec has no address yet; its static field is residual.
+        if (config.dhcp) return emptyList()
+        return virtualCidrs(config)
+    }
+
+    private fun virtualCidrs(config: NetworkConfig): List<String> = buildList {
+        config.ipv4?.takeIf { it.isNotBlank() }?.let { raw ->
+            val (address, prefix) = parseInet(raw)
+            add("$address/$prefix")
+        }
+        addAll(ipv6Cidrs(config))
+    }
+
+    private fun ipv6Cidrs(config: NetworkConfig): List<String> =
+        listOfNotNull(config.ipv6?.takeIf { it.isNotBlank() })
+
+    /** Stops the later-started instance whose DHCP address clashed, then reports why. */
+    private fun stopForOverlap(id: String, message: String) {
+        scope.launch {
+            runCatching { stop(id) }
+            _status.update { current ->
+                val base = current[id] ?: NetworkStatus(
+                    LinkState.Error, null, emptyList(), 0, 0, 0, null,
+                )
+                current + (
+                    id to base.copy(
+                        state = LinkState.Error,
+                        peers = emptyList(),
+                        txBps = 0,
+                        rxBps = 0,
+                        error = message,
+                        reconnecting = false,
+                    )
+                    )
+            }
+        }
+    }
 
     /**
      * Rebuilds the shared TUN from [specs] and attaches it to every running instance.
@@ -499,14 +664,29 @@ public class JniEngine(
                 val json = bridge.collectNetworkInfos(MAX_INSTANCES) ?: continue
                 val time = now()
                 val uptime = ((time - instance.startedAt).coerceAtLeast(0) / 1000)
-                val parsed = StatusParser.parse(json, instance.config.instanceName, uptime) ?: continue
+                val available = runCatching { defaultNetworkAvailable() }.getOrDefault(true)
+                val peerSeenRecently = instance.lastPeerAt > 0 &&
+                    time - instance.lastPeerAt <= PEER_GRACE_MS
+                val parsed = StatusParser.parse(
+                    json,
+                    instance.config.instanceName,
+                    uptime,
+                    networkAvailable = available,
+                    hasConfiguredPeers = instance.config.peers.isNotEmpty(),
+                    peerSeenRecently = peerSeenRecently,
+                ) ?: continue
                 val withRates = StatusParser.applyRates(parsed, instance.previous, time - instance.previousAt)
                 instance.previous = withRates
                 instance.previousAt = time
+                if (withRates.peers.isNotEmpty()) instance.lastPeerAt = time
                 if (!instance.config.flags.noTun) {
                     val runtimeRoutes = TunMerge.peerProxyRoutes(json, instance.config.instanceName)
                     try {
-                        reconcileSpec(id, withRates.myIpv4, runtimeRoutes)
+                        val conflict = reconcileSpec(id, withRates.myIpv4, runtimeRoutes)
+                        if (conflict != null) {
+                            stopForOverlap(id, conflict)
+                            return
+                        }
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
@@ -544,6 +724,9 @@ public class JniEngine(
     private companion object {
         const val MAX_INSTANCES = 32
         const val TUN_DRAIN_MS = 300L
+
+        /** Matches the 8 s "no peers" threshold in StatusParser. */
+        const val PEER_GRACE_MS = 8_000L
 
         /** `Flags.mtu` default; a config that never set mtu keeps this value. */
         const val DEFAULT_KERNEL_MTU = 1380
