@@ -154,6 +154,8 @@ fun NetworkEditScreen(
     openAction: String,
     onBack: () -> Unit,
     perAppSlot: @Composable () -> Unit = {},
+    onShare: (String) -> Unit = {},
+    onScan: () -> Unit = {},
 ) {
     val networks by vm.networks.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -380,9 +382,7 @@ fun NetworkEditScreen(
     BackHandler(enabled = dirty) { showDiscard = true }
 
     LaunchedEffect(openAction) {
-        if (openAction == "scan") {
-            Toast.makeText(context, "扫码导入入口已预留，等 ML Kit 接入后可用", Toast.LENGTH_SHORT).show()
-        }
+        if (openAction == "scan") onScan()
     }
 
     val nameError = if (form!!.name.isBlank()) "网络名称不能为空" else null
@@ -1415,6 +1415,16 @@ fun NetworkEditScreen(
                     onClick = { showExport = true },
                     secondary = true,
                     modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        if (networkId != "new") {
+            item {
+                PillButton(
+                    "分享二维码 / 链接",
+                    onClick = { onShare(networkId) },
+                    secondary = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }

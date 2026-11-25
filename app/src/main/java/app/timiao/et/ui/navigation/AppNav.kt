@@ -55,6 +55,7 @@ object Routes {
     const val EVENT_LOG = "event_log"
     const val DIAGNOSTICS = "diagnostics"
     const val TRAFFIC = "traffic"
+    const val SCAN = "scan"
     const val SHARE_PATTERN = "share/{id}"
     fun share(id: String) = "share/$id"
     const val EDIT_PATTERN = "network/{id}?open={open}"
@@ -65,6 +66,7 @@ object Routes {
 private fun dockOwner(route: String?): String? = when (route) {
     Routes.NODE_INFO -> Routes.HOME
     Routes.EVENT_LOG -> Routes.PEERS
+    Routes.SCAN -> Routes.NETWORKS
     Routes.DIAGNOSTICS, Routes.TRAFFIC, AUTO_RULES_ROUTE, SplitRoutes.PATTERN -> Routes.SETTINGS
     else -> if (route?.startsWith("share/") == true) Routes.NETWORKS else route
 }
@@ -128,6 +130,14 @@ fun TimiaoRoot(vm: AppViewModel) {
                     configProvider = { net -> vm.rawConfig(net.id) },
                 )
             }
+            composable(Routes.SCAN) {
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                val container = (ctx.applicationContext as app.timiao.et.TimiaoApplication).container
+                app.timiao.et.ui.screens.ScanScreen(
+                    importSink = { toml, _ -> importSharedToml(container, toml) },
+                    onBack = { nav.popBackStack() },
+                )
+            }
             composable(Routes.TRAFFIC) { TrafficScreen(vm, recorder = vm.trafficRecorder) }
             composable(AUTO_RULES_ROUTE) { AutoRulesScreen(vm) { nav.popBackStack() } }
             composable(SplitRoutes.PATTERN, listOf(navArgument("networkId") { type = NavType.StringType })) {
@@ -153,6 +163,13 @@ fun TimiaoRoot(vm: AppViewModel) {
                     networkId = id,
                     openAction = open,
                     onBack = { nav.popBackStack() },
+                    perAppSlot = {
+                        app.timiao.et.ui.screens.AppSplitEntryRow(SplitStoreGlobalId) {
+                            nav.navigate(SplitRoutes.of(SplitStoreGlobalId))
+                        }
+                    },
+                    onShare = { nav.navigate(Routes.share(it)) },
+                    onScan = { nav.navigate(Routes.SCAN) },
                 )
             }
         }
@@ -202,4 +219,13 @@ private fun NavHostController.navigateTopLevel(route: String) {
         launchSingleTop = true
         restoreState = true
     }
+}
+
+/** Saves an imported config; a repeated instance id gets a fresh one so two devices never collide. */
+suspend fun importSharedToml(container: app.timiao.et.di.AppContainer, toml: String) {
+    var cfg = container.configRepository.importToml(toml)
+    if (container.configRepository.get(cfg.id) != null) {
+        cfg = cfg.copy(instanceId = java.util.UUID.randomUUID().toString())
+    }
+    container.configRepository.save(cfg)
 }
