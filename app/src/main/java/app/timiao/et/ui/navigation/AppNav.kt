@@ -1,6 +1,16 @@
 package app.timiao.et.ui.navigation
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.unit.IntOffset
+import app.timiao.et.ui.theme.LocalReducedMotion
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -50,10 +60,15 @@ fun TimiaoRoot(vm: AppViewModel) {
 
     Box(Modifier.fillMaxSize()) {
         GlassBackdrop()
+        val reduced = LocalReducedMotion.current
         NavHost(
             navController = nav,
             startDestination = Routes.HOME,
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
+            enterTransition = { pageEnter(initialState.destination.route, targetState.destination.route, reduced) },
+            exitTransition = { pageExit(initialState.destination.route, targetState.destination.route, reduced) },
+            popEnterTransition = { pageEnter(initialState.destination.route, targetState.destination.route, reduced) },
+            popExitTransition = { pageExit(initialState.destination.route, targetState.destination.route, reduced) },
         ) {
             composable(Routes.HOME) {
                 HomeScreen(vm) { target -> nav.navigateTopLevel(target) }
@@ -96,6 +111,33 @@ fun TimiaoRoot(vm: AppViewModel) {
                 .padding(horizontal = 18.dp, vertical = 10.dp),
         )
     }
+}
+
+private val TabOrder = listOf(Routes.HOME, Routes.PEERS, Routes.NETWORKS, Routes.SETTINGS)
+
+/** Tab index; the edit page counts as one step to the right of its tab. */
+private fun order(route: String?): Float = when {
+    route == null -> 0f
+    route.startsWith("network/") -> TabOrder.indexOf(Routes.NETWORKS) + 0.5f
+    else -> TabOrder.indexOf(route).coerceAtLeast(0).toFloat()
+}
+
+private val PageEase = tween<IntOffset>(durationMillis = 260, easing = FastOutSlowInEasing)
+
+private fun pageEnter(from: String?, to: String?, reduced: Boolean): EnterTransition {
+    val fade = fadeIn(tween(200, delayMillis = 40))
+    if (reduced) return fade
+    val dir = if (order(to) >= order(from)) 1 else -1
+    val push = to?.startsWith("network/") == true || from?.startsWith("network/") == true
+    return fade + slideInHorizontally(PageEase) { w -> dir * (if (push) w else w / 10) }
+}
+
+private fun pageExit(from: String?, to: String?, reduced: Boolean): ExitTransition {
+    val fade = fadeOut(tween(140))
+    if (reduced) return fade
+    val dir = if (order(to) >= order(from)) -1 else 1
+    val push = to?.startsWith("network/") == true || from?.startsWith("network/") == true
+    return fade + slideOutHorizontally(PageEase) { w -> dir * (if (push) w / 4 else w / 10) }
 }
 
 private fun NavHostController.navigateTopLevel(route: String) {

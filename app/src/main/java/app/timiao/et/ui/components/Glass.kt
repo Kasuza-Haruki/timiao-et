@@ -53,14 +53,17 @@ fun Modifier.glass(
         .drawWithContent {
             drawContent()
             if (level != GlassLevel.Subtle) {
-                val w = size.width * 0.82f
+                // Soft specular sheen: radial, centred on the top edge, fades to nothing well
+                // inside the card. No hard rectangle edges, so it also works on dark surfaces.
+                val strength = g.highlight.alpha * if (level == GlassLevel.Strong) 1f else 0.7f
+                val radius = size.width * 0.55f
                 drawRect(
-                    brush = Brush.verticalGradient(
-                        0f to g.highlight.copy(alpha = g.highlight.alpha * if (level == GlassLevel.Strong) 1f else 0.7f),
-                        0.45f to Color.Transparent,
+                    brush = Brush.radialGradient(
+                        colors = listOf(g.highlight.copy(alpha = strength), Color.Transparent),
+                        center = Offset(size.width / 2f, 0f),
+                        radius = radius,
                     ),
-                    topLeft = Offset((size.width - w) / 2f, 0f),
-                    size = Size(w, size.height * 0.42f),
+                    size = Size(size.width, minOf(size.height, radius)),
                 )
             }
         }

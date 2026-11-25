@@ -1,5 +1,12 @@
 package app.timiao.et.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -422,34 +429,47 @@ fun SegmentedGlass(
     val g = LocalGlassColors.current
     val reduced = LocalReducedMotion.current
     val shape = RoundedCornerShape(999.dp)
-    Row(
+    val position by animateFloatAsState(
+        targetValue = selected.toFloat(),
+        animationSpec = if (reduced) snap() else spring(dampingRatio = 0.72f, stiffness = 380f),
+        label = "segment-pos",
+    )
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .glass(shape, GlassLevel.Regular)
             .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        options.forEachIndexed { index, label ->
-            val active = index == selected
-            val bg by animateColorAsState(
-                targetValue = if (active) g.dockSelected else Color.Transparent,
-                animationSpec = if (reduced) snap() else tween(180),
-                label = "segment-bg",
-            )
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(shape)
-                    .background(bg)
-                    .clickable { onSelect(index) }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
-                    color = if (active) MaterialTheme.colorScheme.primary else g.muted,
-                )
+        val slot = maxWidth / options.size
+        val slotPx = with(LocalDensity.current) { slot.toPx() }
+        Box(
+            Modifier
+                .offset { IntOffset((position * slotPx).roundToInt(), 0) }
+                .width(slot)
+                .height(34.dp)
+                .clip(shape)
+                .background(g.dockSelected),
+        )
+        Row {
+            options.forEachIndexed { index, label ->
+                val near = (1f - abs(position - index)).coerceIn(0f, 1f)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(34.dp)
+                        .clip(shape)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { onSelect(index) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        color = lerp(g.muted, MaterialTheme.colorScheme.primary, near),
+                    )
+                }
             }
         }
     }
