@@ -365,10 +365,25 @@ internal object StatusChecks {
 
 internal object DeviceChecks {
     fun run(probe: DeviceProbe): List<DiagItem> = listOf(
+        network(probe),
         vpn(probe),
         battery(probe),
         notifications(probe),
     )
+
+    /** Answers "no Internet at all" without waiting for a kernel event. */
+    private fun network(probe: DeviceProbe): DiagItem =
+        if (probe.hasUnderlyingNetwork()) {
+            DiagItem("device_network", "设备网络", DiagSeverity.Pass, "设备当前有可用网络")
+        } else {
+            DiagItem(
+                id = "device_network",
+                title = "设备网络",
+                severity = DiagSeverity.Fail,
+                summary = "设备当前没有可用网络",
+                advice = "打开 Wi-Fi 或移动数据，等系统显示网络可用后再诊断和连接。",
+            )
+        }
 
     private fun vpn(probe: DeviceProbe): DiagItem = if (probe.hasVpnPermission()) {
         DiagItem("device_vpn", "VPN 权限", DiagSeverity.Pass, "已获得 VPN 授权")
