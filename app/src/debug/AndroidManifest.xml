@@ -15,6 +15,7 @@
                 <action android:name="app.timiao.et.DEBUG_START" />
                 <action android:name="app.timiao.et.DEBUG_STOP" />
                 <action android:name="app.timiao.et.DEBUG_DUMP" />
+                <action android:name="app.timiao.et.DEBUG_SPLIT" />
                 <action android:name="app.timiao.et.DEBUG_LIST" />
                 <action android:name="app.timiao.et.DEBUG_PREPARE" />
             </intent-filter>

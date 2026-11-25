@@ -18,6 +18,8 @@ import app.timiao.et.TimiaoApplication
 import app.timiao.et.core.LinkState
 import app.timiao.et.core.MergedTun
 import app.timiao.et.core.NetworkStatus
+import app.timiao.et.split.SplitStore
+import app.timiao.et.split.applyAppFilter
 import app.timiao.et.core.TunMerge
 import app.timiao.et.core.TunSpec
 import kotlinx.coroutines.CoroutineScope
@@ -98,9 +100,8 @@ class TimiaoVpnService : VpnService() {
         merged.addresses.forEach { b.addAddress(it.address, it.prefix) }
         merged.routes.forEach { b.addRoute(it.network, it.prefix) }
         merged.dns.forEach { b.addDnsServer(it) }
-        runCatching { b.addDisallowedApplication(packageName) }
         if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
-        // Split-tunnel policy hook goes here, after the Builder is configured and before establish.
+        applyAppFilter(b, SplitStore.policy(this, SplitStore.GLOBAL_ID))
         val pfd = b.establish() ?: error("VPN permission was revoked")
         return pfd.detachFd()
     }

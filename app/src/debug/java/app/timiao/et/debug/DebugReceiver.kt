@@ -7,6 +7,9 @@ import android.util.Log
 import app.timiao.et.TimiaoApplication
 import app.timiao.et.core.NetworkConfig
 import app.timiao.et.service.TimiaoVpnService
+import app.timiao.et.split.SplitMode
+import app.timiao.et.split.SplitPolicy
+import app.timiao.et.split.SplitStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -47,6 +50,24 @@ class DebugReceiver : BroadcastReceiver() {
                             Log.i(TAG, "requested VPN consent")
                         } else {
                             Log.i(TAG, "VPN consent already granted")
+                        }
+                    }
+                    // Sets the per-app split policy. Extras: id (optional), mode (all|allow|deny),
+                    // packages (comma separated). Takes effect on the next connect.
+                    "app.timiao.et.DEBUG_SPLIT" -> {
+                        val id = intent.getStringExtra("id")
+                            ?: container.configRepository.get("Home-Lab")?.id
+                        if (id == null) {
+                            Log.w(TAG, "split: no network id")
+                        } else {
+                            val mode = SplitMode.fromKey(intent.getStringExtra("mode")) ?: SplitMode.All
+                            val packages = (intent.getStringExtra("packages") ?: "")
+                                .split(',')
+                                .map { it.trim() }
+                                .filter { it.isNotEmpty() }
+                                .toSet()
+                            SplitStore(context).save(SplitStore.GLOBAL_ID, SplitPolicy(mode, packages))
+                            Log.i(TAG, "split id=$id mode=${mode.key} apps=${packages.size}")
                         }
                     }
                     "app.timiao.et.DEBUG_DUMP" -> {
