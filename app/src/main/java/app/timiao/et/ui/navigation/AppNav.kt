@@ -31,9 +31,11 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import app.timiao.et.ui.AppViewModel
 import app.timiao.et.ui.components.GlassBackdrop
 import app.timiao.et.ui.components.GlassDock
+import app.timiao.et.ui.screens.EventLogScreen
 import app.timiao.et.ui.screens.HomeScreen
 import app.timiao.et.ui.screens.NetworkEditScreen
 import app.timiao.et.ui.screens.NetworksScreen
+import app.timiao.et.ui.screens.NodeInfoScreen
 import app.timiao.et.ui.screens.PeersScreen
 import app.timiao.et.ui.screens.SettingsScreen
 
@@ -42,8 +44,17 @@ object Routes {
     const val PEERS = "peers"
     const val NETWORKS = "networks"
     const val SETTINGS = "settings"
+    const val NODE_INFO = "node_info"
+    const val EVENT_LOG = "event_log"
     const val EDIT_PATTERN = "network/{id}?open={open}"
     fun edit(id: String, open: String = "none") = "network/$id?open=$open"
+}
+
+/** Screens pushed on top of a tab; the dock keeps the owning tab highlighted. */
+private fun dockOwner(route: String?): String? = when (route) {
+    Routes.NODE_INFO -> Routes.HOME
+    Routes.EVENT_LOG -> Routes.PEERS
+    else -> route
 }
 
 @Composable
@@ -55,7 +66,7 @@ fun TimiaoRoot(vm: AppViewModel) {
     val dockRoute = when {
         route == null -> Routes.HOME
         route.startsWith("network/") -> Routes.NETWORKS
-        else -> route
+        else -> dockOwner(route) ?: Routes.HOME
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -71,10 +82,25 @@ fun TimiaoRoot(vm: AppViewModel) {
             popExitTransition = { pageExit(initialState.destination.route, targetState.destination.route, reduced) },
         ) {
             composable(Routes.HOME) {
-                HomeScreen(vm) { target -> nav.navigateTopLevel(target) }
+                HomeScreen(vm) { target ->
+                    if (target == Routes.NODE_INFO) nav.navigate(Routes.NODE_INFO)
+                    else nav.navigateTopLevel(target)
+                }
             }
             composable(Routes.PEERS) {
-                PeersScreen(vm)
+                PeersScreen(
+                    vm = vm,
+                    onNavigate = { target ->
+                        if (target == Routes.EVENT_LOG) nav.navigate(Routes.EVENT_LOG)
+                        else nav.navigateTopLevel(target)
+                    },
+                )
+            }
+            composable(Routes.NODE_INFO) {
+                NodeInfoScreen(vm, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.EVENT_LOG) {
+                EventLogScreen(vm, onBack = { nav.popBackStack() })
             }
             composable(Routes.NETWORKS) {
                 NetworksScreen(vm) { nav.navigate(it) }
