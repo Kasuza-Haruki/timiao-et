@@ -38,12 +38,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import app.timiao.et.R
 import app.timiao.et.split.AppIconCache
 import app.timiao.et.split.InstalledApp
 import app.timiao.et.split.InstalledAppsLoader
@@ -88,9 +90,9 @@ fun AppSplitEntryRow(networkId: String, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("按应用分流", style = MaterialTheme.typography.labelSmall, color = g.muted)
+                Text(stringResource(R.string.split_title), style = MaterialTheme.typography.labelSmall, color = g.muted)
                 Text(
-                    text = policy.summary(),
+                    text = splitSummary(policy),
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -99,7 +101,7 @@ fun AppSplitEntryRow(networkId: String, onClick: () -> Unit) {
             }
             Icon(
                 imageVector = Icons.Filled.ArrowForward,
-                contentDescription = "打开",
+                contentDescription = stringResource(R.string.action_open),
                 tint = g.muted,
                 modifier = Modifier.size(20.dp),
             )
@@ -151,12 +153,12 @@ fun AppSplitScreen(networkId: String, onBack: () -> Unit) {
     ) {
         item {
             ScreenHeader(
-                title = "按应用分流",
-                subtitle = "改动在下次连接后生效",
+                title = stringResource(R.string.split_title),
+                subtitle = stringResource(R.string.split_subtitle),
                 onBack = onBack,
             )
         }
-        item { SectionLabel("模式") }
+        item { SectionLabel(stringResource(R.string.split_section_mode)) }
         item {
             Column(
                 modifier = Modifier
@@ -165,7 +167,7 @@ fun AppSplitScreen(networkId: String, onBack: () -> Unit) {
                     .padding(12.dp),
             ) {
                 SegmentedGlass(
-                    options = SplitMode.entries.map { it.label },
+                    options = SplitMode.entries.map { stringResource(it.labelRes) },
                     selected = policy.mode.ordinal,
                     onSelect = { update(policy.copy(mode = SplitMode.entries[it])) },
                 )
@@ -174,9 +176,9 @@ fun AppSplitScreen(networkId: String, onBack: () -> Unit) {
         item {
             Text(
                 text = when (policy.mode) {
-                    SplitMode.All -> "所有应用都通过 EasyTier 访问网络。"
-                    SplitMode.Allow -> "只有勾选的应用通过 EasyTier，其余应用直连。"
-                    SplitMode.Deny -> "勾选的应用直连，其余应用通过 EasyTier。"
+                    SplitMode.All -> stringResource(R.string.split_all_desc)
+                    SplitMode.Allow -> stringResource(R.string.split_allow_desc)
+                    SplitMode.Deny -> stringResource(R.string.split_deny_desc)
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
@@ -185,19 +187,19 @@ fun AppSplitScreen(networkId: String, onBack: () -> Unit) {
         }
 
         if (policy.mode == SplitMode.All) {
-            item { EmptyGlassCard("当前模式无需选择应用。") }
+            item { EmptyGlassCard(stringResource(R.string.split_no_selection_needed)) }
         } else {
             item {
                 GlassSearchField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = "搜索应用名或包名",
+                    placeholder = stringResource(R.string.split_search),
                 )
             }
             item {
                 GlassSwitchRow(
-                    title = "显示系统应用",
-                    subtitle = "通常不需要为系统组件分流",
+                    title = stringResource(R.string.split_show_system),
+                    subtitle = stringResource(R.string.split_show_system_sub),
                     checked = showSystem,
                     onCheckedChange = { showSystem = it },
                 )
@@ -205,20 +207,20 @@ fun AppSplitScreen(networkId: String, onBack: () -> Unit) {
             item {
                 SectionLabel(
                     if (policy.mode == SplitMode.Allow) {
-                        "已选 ${policy.packages.size} 个应用走 EasyTier"
+                        stringResource(R.string.split_selected_allow, policy.packages.size)
                     } else {
-                        "已选 ${policy.packages.size} 个应用直连"
+                        stringResource(R.string.split_selected_deny, policy.packages.size)
                     },
                 )
             }
             when {
-                loading -> item { EmptyGlassCard("正在读取应用…", loading = true) }
+                loading -> item { EmptyGlassCard(stringResource(R.string.split_loading), loading = true) }
                 filtered.isEmpty() -> item {
                     EmptyGlassCard(
                         if (!showSystem && apps.isEmpty()) {
-                            "未找到第三方应用，可打开上方的“显示系统应用”"
+                            stringResource(R.string.split_no_third_party)
                         } else {
-                            "没有匹配的应用"
+                            stringResource(R.string.split_no_match)
                         },
                     )
                 }
@@ -243,6 +245,17 @@ fun AppSplitScreen(networkId: String, onBack: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun splitSummary(policy: SplitPolicy): String = when (policy.mode) {
+    SplitMode.All -> stringResource(R.string.split_summary_all)
+    SplitMode.Allow ->
+        if (policy.packages.isEmpty()) stringResource(R.string.split_summary_none)
+        else stringResource(R.string.split_summary_allow, policy.packages.size)
+    SplitMode.Deny ->
+        if (policy.packages.isEmpty()) stringResource(R.string.split_summary_none)
+        else stringResource(R.string.split_summary_deny, policy.packages.size)
 }
 
 @Composable

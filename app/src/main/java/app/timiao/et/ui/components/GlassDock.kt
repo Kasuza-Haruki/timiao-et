@@ -29,17 +29,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.timiao.et.R
 import app.timiao.et.ui.theme.LocalGlassColors
 import app.timiao.et.ui.theme.LocalReducedMotion
 
-data class DockItem(val route: String, val label: String)
+data class DockItem(val route: String, val labelRes: Int)
 
 val DockItems = listOf(
-    DockItem("home", "首页"),
-    DockItem("peers", "节点"),
-    DockItem("networks", "网络"),
-    DockItem("settings", "设置"),
+    DockItem("home", R.string.dock_home),
+    DockItem("peers", R.string.dock_peers),
+    DockItem("networks", R.string.dock_networks),
+    DockItem("settings", R.string.dock_settings),
 )
 
 /**
@@ -97,7 +99,7 @@ fun GlassDock(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = item.label,
+                        text = stringResource(item.labelRes),
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
                         color = lerp(g.muted, MaterialTheme.colorScheme.primary, near),
                     )

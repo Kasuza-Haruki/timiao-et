@@ -66,6 +66,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -108,7 +109,7 @@ fun ScreenHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {
-            OrbButton(icon = Icons.Filled.ArrowBack, label = "返回", onClick = onBack)
+            OrbButton(icon = Icons.Filled.ArrowBack, label = stringResource(R.string.action_back), onClick = onBack)
             Spacer(Modifier.width(10.dp))
         }
         Column(Modifier.weight(1f)) {
@@ -318,7 +319,7 @@ fun LatencyPill(peer: PeerInfo, modifier: Modifier = Modifier) {
         val loss = peer.lossRate ?: 0.0
         if (loss > 0.0) {
             Text(
-                text = String.format(Locale.US, "丢包 %.1f%%", loss),
+                text = stringResource(R.string.label_loss_percent, String.format(Locale.US, "%.1f", loss)),
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 fontSize = 10.sp,
@@ -355,7 +356,7 @@ fun PeerRow(
                 overflow = TextOverflow.Ellipsis,
             )
             val detail = if (peer.isRelay()) {
-                listOfNotNull(peer.ipv4 ?: "—", "经中继", peer.tunnelLabel().takeUnless { it == "—" })
+                listOfNotNull(peer.ipv4 ?: "—", stringResource(R.string.label_relay_via), peer.tunnelLabel().takeUnless { it == "—" })
                     .joinToString(" · ")
             } else {
                 listOfNotNull(
@@ -484,9 +485,10 @@ fun GlassSearchField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    placeholder: String = "搜索主机名或 IP",
+    placeholder: String = "",
 ) {
     val g = LocalGlassColors.current
+    val hint = placeholder.ifBlank { stringResource(R.string.search_host_or_ip) }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -516,7 +518,7 @@ fun GlassSearchField(
                 Box(contentAlignment = Alignment.CenterStart) {
                     if (value.isEmpty()) {
                         Text(
-                            placeholder,
+                            hint,
                             style = MaterialTheme.typography.bodyMedium,
                             color = g.muted.copy(alpha = 0.8f),
                             maxLines = 1,
@@ -618,7 +620,7 @@ fun <T> GlassDropdownRow(
             }
             Icon(
                 Icons.Filled.KeyboardArrowDown,
-                contentDescription = "展开",
+                contentDescription = stringResource(R.string.action_expand),
                 tint = g.muted,
                 modifier = Modifier.size(20.dp),
             )
@@ -672,7 +674,7 @@ fun ExpandableHeader(
         }
         Icon(
             Icons.Filled.KeyboardArrowDown,
-            contentDescription = if (expanded) "收起" else "展开",
+            contentDescription = stringResource(if (expanded) R.string.action_collapse else R.string.action_expand),
             tint = g.muted,
             modifier = Modifier
                 .size(20.dp)
@@ -730,10 +732,11 @@ fun EmptyGlassCard(
 fun ConfirmDialog(
     title: String,
     text: String,
-    confirmText: String = "确定",
+    confirmText: String = "",
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val confirmLabel = confirmText.ifBlank { stringResource(R.string.action_confirm) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -742,10 +745,10 @@ fun ConfirmDialog(
             TextButton(onClick = {
                 onDismiss()
                 onConfirm()
-            }) { Text(confirmText, color = MaterialTheme.colorScheme.primary) }
+            }) { Text(confirmLabel, color = MaterialTheme.colorScheme.primary) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
         containerColor = MaterialTheme.colorScheme.surface,
     )

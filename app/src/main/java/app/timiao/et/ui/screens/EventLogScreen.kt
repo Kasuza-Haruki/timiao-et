@@ -31,11 +31,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.timiao.et.R
 import app.timiao.et.core.NetworkEvent
 import app.timiao.et.core.NetworkEventKind
 import app.timiao.et.ui.AppViewModel
@@ -48,7 +50,7 @@ import app.timiao.et.ui.components.glass
 import app.timiao.et.ui.components.pageInset
 import app.timiao.et.ui.theme.LocalGlassColors
 import app.timiao.et.ui.util.copyToClipboard
-import app.timiao.et.ui.util.eventTypeLabel
+import app.timiao.et.ui.util.eventTypeLabelRes
 import app.timiao.et.ui.util.formatEventTime
 
 /** Kernel event journal (`events` in `collectNetworkInfos`), newest first. */
@@ -75,12 +77,14 @@ fun EventLogScreen(
     val connectCount by remember { derivedStateOf { status.events.count { it.kind == NetworkEventKind.Connect } } }
     val errorCount by remember { derivedStateOf { status.events.count { it.kind == NetworkEventKind.Error } } }
 
-    fun line(event: NetworkEvent): String =
-        "${formatEventTime(event.timeMs)} [${eventTypeLabel(event.type)}] ${event.detail}"
+    fun line(event: NetworkEvent): String {
+        val type = eventTypeLabelRes(event.type)?.let { context.getString(it) } ?: event.type
+        return "${formatEventTime(event.timeMs)} [$type] ${detailText(context, event)}"
+    }
 
     fun copyAll() {
         if (events.isEmpty()) return
-        copyToClipboard(context, "事件日志", events.joinToString("\n") { line(it) })
+        copyToClipboard(context, context.getString(R.string.eventlog_clip_label), events.joinToString("\n") { line(it) })
     }
 
     LazyColumn(
@@ -90,12 +94,12 @@ fun EventLogScreen(
     ) {
         item {
             ScreenHeader(
-                title = "事件日志",
-                subtitle = active?.let { "${it.name} · ${status.events.size} 条" } ?: "未选择网络",
+                title = stringResource(R.string.eventlog_title),
+                subtitle = active?.let { stringResource(R.string.eventlog_sub_with_count, it.name, status.events.size) } ?: stringResource(R.string.eventlog_sub_no_net),
                 onBack = onBack,
                 action = {
                     GlassPillAction(
-                        text = "复制",
+                        text = stringResource(R.string.eventlog_copy),
                         onClick = { copyAll() },
                         enabled = events.isNotEmpty(),
                     )
@@ -105,9 +109,9 @@ fun EventLogScreen(
         item {
             SegmentedGlass(
                 options = listOf(
-                    "全部 ${status.events.size}",
-                    "连接 $connectCount",
-                    "错误 $errorCount",
+                    stringResource(R.string.eventlog_filter_all, status.events.size),
+                    stringResource(R.string.eventlog_filter_connect, connectCount),
+                    stringResource(R.string.eventlog_filter_error, errorCount),
                 ),
                 selected = filter,
                 onSelect = { filter = it },
@@ -115,7 +119,7 @@ fun EventLogScreen(
         }
         item {
             Text(
-                text = "最新事件在前，长按一条可复制。",
+                text = stringResource(R.string.eventlog_hint),
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 6.dp),
@@ -126,10 +130,10 @@ fun EventLogScreen(
             item {
                 EmptyGlassCard(
                     text = when {
-                        status.events.isEmpty() -> "暂无事件。连接网络后，内核事件会显示在这里。"
-                        filter == 2 -> "没有错误事件。"
-                        filter == 1 -> "没有连接事件。"
-                        else -> "没有匹配的事件。"
+                        status.events.isEmpty() -> stringResource(R.string.eventlog_empty)
+                        filter == 2 -> stringResource(R.string.eventlog_empty_error)
+                        filter == 1 -> stringResource(R.string.eventlog_empty_connect)
+                        else -> stringResource(R.string.eventlog_empty_match)
                     },
                 )
             }
@@ -140,17 +144,24 @@ fun EventLogScreen(
             ) { _, event ->
                 EventRow(
                     event = event,
-                    onLongClick = { copyToClipboard(context, "事件", line(event)) },
+                    onLongClick = { copyToClipboard(context, context.getString(R.string.eventlog_event_clip_label), line(event)) },
                 )
             }
         }
     }
 }
 
+private fun detailText(context: android.content.Context, event: NetworkEvent): String {
+    val key = event.detailKey ?: return event.detail
+    val id = context.resources.getIdentifier(key, "string", context.packageName)
+    return if (id == 0) event.detail else context.getString(id, *event.detailArgs.toTypedArray())
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EventRow(event: NetworkEvent, onLongClick: () -> Unit) {
     val g = LocalGlassColors.current
+    val context = LocalContext.current
     val accent = when (event.kind) {
         NetworkEventKind.Error -> MaterialTheme.colorScheme.error
         NetworkEventKind.Connect -> g.good
@@ -175,7 +186,7 @@ private fun EventRow(event: NetworkEvent, onLongClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = eventTypeLabel(event.type),
+                    text = eventTypeLabelRes(event.type)?.let { stringResource(it) } ?: event.type,
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
@@ -190,7 +201,7 @@ private fun EventRow(event: NetworkEvent, onLongClick: () -> Unit) {
             }
             if (event.detail.isNotBlank()) {
                 Text(
-                    text = event.detail,
+                    text = detailText(context, event),
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                     color = g.muted,
                     maxLines = 3,

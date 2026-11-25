@@ -60,6 +60,10 @@ internal object TopologyLayout {
         myPeerId: String?,
         widthDp: Float,
         fontScale: Float = 1f,
+        rootLabel: String = "This device",
+        offlineLabel: String = "Not connected",
+        peerFallback: String = "Peer",
+        relaySuffix: String = "relay",
     ): TopoLayout {
         val keys = peers.mapIndexed { index, peer ->
             peer.peerId?.let { "peer:$it" } ?: "n:$index"
@@ -113,8 +117,8 @@ internal object TopologyLayout {
         val rootY = TOP_PAD_DP + NODE_R_DP
         nodes += TopoNode(
             key = ROOT_KEY,
-            label = "本机",
-            sub = myIpv4 ?: "未连接",
+            label = rootLabel,
+            sub = myIpv4 ?: offlineLabel,
             isRoot = true,
             isRelay = false,
             xDp = widthDp / 2f,
@@ -137,8 +141,8 @@ internal object TopologyLayout {
                     val latency = peer.latencyMs?.let { "${it.toInt()} ms" } ?: "—"
                     nodes += TopoNode(
                         key = keys[index],
-                        label = peer.hostname.ifBlank { peer.ipv4 ?: "节点" },
-                        sub = if (peer.isRelay()) "$latency · 中继" else latency,
+                        label = peer.hostname.ifBlank { peer.ipv4 ?: peerFallback },
+                        sub = if (peer.isRelay()) "$latency · $relaySuffix" else latency,
                         isRoot = false,
                         isRelay = peer.isRelay(),
                         xDp = startX + column * cellW,

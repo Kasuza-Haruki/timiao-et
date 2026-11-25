@@ -279,6 +279,7 @@ public class JniEngine(
     /** Public-relay peers can need 20-40 s before they hand out a DHCP address. */
     private val maxDhcpAttempts: Int = 40,
     private val now: () -> Long = { System.currentTimeMillis() },
+    private val strings: CoreStrings = ChineseCoreStrings,
 ) : Engine, AutoCloseable {
 
     private class Running(val config: NetworkConfig, val startedAt: Long) {
@@ -547,7 +548,7 @@ public class JniEngine(
                     if (TunMerge.cidrOverlap(candidate, runningCidr)) {
                         val display = TunMerge.normalizedCidr(runningCidr) ?: runningCidr
                         val name = other.config.networkName.ifBlank { other.config.instanceName }
-                        return "与正在运行的「$name」网段重叠（$display），请先断开它或修改网段"
+                        return strings.get("core_overlap_message", name, display)
                     }
                 }
             }

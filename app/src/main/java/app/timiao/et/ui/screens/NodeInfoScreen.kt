@@ -21,11 +21,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.timiao.et.R
 import app.timiao.et.ui.AppViewModel
 import app.timiao.et.ui.components.EmptyGlassCard
 import app.timiao.et.ui.components.GlassLevel
@@ -54,51 +56,51 @@ fun NodeInfoScreen(
     ) {
         item {
             ScreenHeader(
-                title = "本机信息",
-                subtitle = node?.hostname?.takeIf { it.isNotBlank() } ?: "未连接",
+                title = stringResource(R.string.node_title),
+                subtitle = node?.hostname?.takeIf { it.isNotBlank() } ?: stringResource(R.string.node_not_connected),
                 onBack = onBack,
             )
         }
 
         if (node == null) {
-            item { EmptyGlassCard(text = "还没有本机信息。连接网络后显示。") }
+            item { EmptyGlassCard(text = stringResource(R.string.node_empty)) }
         } else {
             item {
-                InfoSection("身份") {
+                InfoSection(stringResource(R.string.node_identity)) {
                     CopyRow("Peer ID", node.peerId)
-                    CopyRow("虚拟 IPv4", node.virtualIpv4 ?: status.myIpv4)
-                    CopyRow("虚拟 IPv6", node.virtualIpv6)
-                    CopyRow("主机名", node.hostname)
-                    CopyRow("版本", node.version)
+                    CopyRow(stringResource(R.string.node_virtual_ipv4), node.virtualIpv4 ?: status.myIpv4)
+                    CopyRow(stringResource(R.string.node_virtual_ipv6), node.virtualIpv6)
+                    CopyRow(stringResource(R.string.node_hostname), node.hostname)
+                    CopyRow(stringResource(R.string.node_version), node.version)
                 }
             }
             item {
-                InfoSection("地址") {
+                InfoSection(stringResource(R.string.node_addresses)) {
                     if (node.localIpv4s.isEmpty()) {
-                        CopyRow("本机 IPv4", null)
+                        CopyRow(stringResource(R.string.node_local_ipv4), null)
                     } else {
                         node.localIpv4s.forEachIndexed { index, ip ->
-                            CopyRow(if (node.localIpv4s.size == 1) "本机 IPv4" else "本机 IPv4 ${index + 1}", ip)
+                            CopyRow(if (node.localIpv4s.size == 1) stringResource(R.string.node_local_ipv4) else stringResource(R.string.node_local_ipv4_n, index + 1), ip)
                         }
                     }
                     if (node.localIpv6s.isEmpty()) {
-                        CopyRow("本机 IPv6", null)
+                        CopyRow(stringResource(R.string.node_local_ipv6), null)
                     } else {
                         node.localIpv6s.forEachIndexed { index, ip ->
-                            CopyRow(if (node.localIpv6s.size == 1) "本机 IPv6" else "本机 IPv6 ${index + 1}", ip)
+                            CopyRow(if (node.localIpv6s.size == 1) stringResource(R.string.node_local_ipv6) else stringResource(R.string.node_local_ipv6_n, index + 1), ip)
                         }
                     }
-                    CopyRow("公网 IPv4", node.publicIpv4)
-                    CopyRow("公网 IPv6", node.publicIpv6)
+                    CopyRow(stringResource(R.string.node_public_ipv4), node.publicIpv4)
+                    CopyRow(stringResource(R.string.node_public_ipv6), node.publicIpv6)
                 }
             }
             item {
-                InfoSection("监听与 NAT") {
+                InfoSection(stringResource(R.string.node_listen_nat)) {
                     if (node.listeners.isEmpty()) {
-                        CopyRow("监听地址", null)
+                        CopyRow(stringResource(R.string.node_listener), null)
                     } else {
                         node.listeners.forEachIndexed { index, url ->
-                            CopyRow(if (node.listeners.size == 1) "监听地址" else "监听地址 ${index + 1}", url)
+                            CopyRow(if (node.listeners.size == 1) stringResource(R.string.node_listener) else stringResource(R.string.node_listener_n, index + 1), url)
                         }
                     }
                     CopyRow("UDP NAT", node.udpNatType?.let { natLabel(it) })
@@ -109,12 +111,12 @@ fun NodeInfoScreen(
                         node.stunMaxPort != null -> node.stunMaxPort.toString()
                         else -> null
                     }
-                    CopyRow("STUN 端口", ports)
+                    CopyRow(stringResource(R.string.node_stun_port), ports)
                 }
             }
             item {
                 Text(
-                    text = "长按任意一行复制。公网地址来自 STUN；NAT 类型随网络环境变化。",
+                    text = stringResource(R.string.node_hint),
                     style = MaterialTheme.typography.labelSmall,
                     color = g.muted,
                     modifier = Modifier.padding(horizontal = 6.dp),

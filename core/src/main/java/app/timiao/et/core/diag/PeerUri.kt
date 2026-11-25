@@ -12,10 +12,14 @@ internal sealed interface PeerUri {
         val host: String?,
         val port: Int?,
         val tcp: Boolean,
-        val note: String? = null,
+        val noteKey: String? = null,
+        val noteArgs: List<String> = emptyList(),
     ) : PeerUri
 
-    data class Invalid(val reason: String) : PeerUri
+    data class Invalid(
+        val reasonKey: String,
+        val args: List<String> = emptyList(),
+    ) : PeerUri
 }
 
 private val SupportedSchemes = setOf(
@@ -25,35 +29,43 @@ private val SupportedSchemes = setOf(
 
 internal fun parsePeerUri(raw: String): PeerUri {
     val text = raw.trim()
-    if (text.isEmpty()) return PeerUri.Invalid("地址为空")
+    if (text.isEmpty()) return PeerUri.Invalid("diag_probe_empty")
     if (!text.contains("://")) {
-        return PeerUri.Invalid("缺少协议前缀，例如 tcp://1.2.3.4:11010")
+        return PeerUri.Invalid("diag_probe_no_scheme")
     }
     val uri = try {
         URI(text)
     } catch (_: Exception) {
-        return PeerUri.Invalid("不是合法的 URL")
+        return PeerUri.Invalid("diag_probe_bad_url")
     }
-    val scheme = uri.scheme?.lowercase() ?: return PeerUri.Invalid("缺少协议")
+    val scheme = uri.scheme?.lowercase() ?: return PeerUri.Invalid("diag_probe_no_protocol")
     if (scheme !in SupportedSchemes) {
-        return PeerUri.Invalid("不支持的协议 $scheme")
+        return PeerUri.Invalid("diag_probe_unsupported", listOf(scheme))
     }
     if (scheme == "ring") {
-        return PeerUri.Endpoint(scheme, null, null, tcp = false, note = "ring 地址由中继服务解析，无法直接探测")
+        return PeerUri.Endpoint(
+            scheme, null, null, tcp = false, noteKey = "diag_probe_ring_note",
+        )
     }
     if (scheme == "txt" || scheme == "srv") {
         val host = uri.host?.takeIf { it.isNotBlank() }
-            ?: return PeerUri.Invalid("缺少主机名")
-        return PeerUri.Endpoint(scheme, host, null, tcp = false, note = "$scheme 记录无法直接探测")
+            ?: return PeerUri.Invalid("diag_probe_no_host")
+        return PeerUri.Endpoint(
+            scheme, host, null, tcp = false,
+            noteKey = "diag_probe_txt_note", noteArgs = listOf(scheme),
+        )
     }
-    val host = uri.host?.takeIf { it.isNotBlank() } ?: return PeerUri.Invalid("缺少主机名")
+    val host = uri.host?.takeIf { it.isNotBlank() }
+        ?: return PeerUri.Invalid("diag_probe_no_host")
     val port = if (uri.port != -1) uri.port else defaultPortFor(scheme)
-    if (port == null || port !in 1..65535) return PeerUri.Invalid("缺少端口或端口无效")
+    if (port == null || port !in 1..65535) return PeerUri.Invalid("diag_probe_bad_port")
 
     val tcp = scheme == "tcp" || scheme == "ws" || scheme == "wss" ||
         scheme == "http" || scheme == "https"
-    val note = if (!tcp) "UDP 探测只能说明已发包，不能确认端口是否开放" else null
-    return PeerUri.Endpoint(scheme, host, port, tcp, note)
+    return PeerUri.Endpoint(
+        scheme, host, port, tcp,
+        noteKey = if (!tcp) "diag_probe_udp_note" else null,
+    )
 }
 
 private fun defaultPortFor(scheme: String): Int? = when (scheme) {
@@ -69,5 +81,5 @@ private fun defaultPortFor(scheme: String): Int? = when (scheme) {
 /** Short, stable text for a parsed URI in details. */
 internal fun PeerUri.describe(): String = when (this) {
     is PeerUri.Endpoint -> "${scheme}://${host ?: "?"}${port?.let { ":$it" } ?: ""}"
-    is PeerUri.Invalid -> reason
+    is PeerUri.Invalid -> reasonKey
 }

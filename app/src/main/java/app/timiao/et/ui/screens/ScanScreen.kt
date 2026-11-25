@@ -46,11 +46,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import app.timiao.et.R
 import app.timiao.et.share.ImportSink
 import app.timiao.et.share.ShareCodec
 import app.timiao.et.ui.components.DockInset
@@ -115,7 +117,7 @@ fun ScanScreen(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         cameraGranted = granted
-        if (!granted) status = "没有相机权限，可以改用相册或粘贴链接。"
+        if (!granted) status = context.getString(R.string.scan_no_permission)
     }
 
     fun performImport(toml: String, hasSecret: Boolean) {
@@ -126,13 +128,13 @@ fun ScanScreen(
                 importSink.import(toml, hasSecret)
                 success = true
                 status = if (hasSecret) {
-                    "导入成功。"
+                    context.getString(R.string.scan_success)
                 } else {
-                    "导入成功，但缺少密钥。请打开网络编辑页补填密钥后再连接。"
+                    context.getString(R.string.scan_success_no_secret)
                 }
             } catch (e: Exception) {
                 success = false
-                status = "导入失败：${e.message ?: "未知错误"}"
+                status = context.getString(R.string.scan_failed, e.message ?: context.getString(R.string.scan_unknown_error))
             } finally {
                 busy = false
             }
@@ -144,7 +146,7 @@ fun ScanScreen(
         when (val decoded = ShareCodec.parseImportText(raw)) {
             is ShareCodec.DecodeResult.Invalid -> {
                 success = false
-                status = decoded.reason
+                status = ShareCodec.message(context, decoded)
             }
             is ShareCodec.DecodeResult.Success -> {
                 if (decoded.hasSecret) {
@@ -161,11 +163,11 @@ fun ScanScreen(
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            status = "正在识别图片…"
+            status = context.getString(R.string.scan_recognizing)
             success = false
             val raw = decodeQrImage(context, uri)
             if (raw == null) {
-                status = "图片里没有找到可识别的二维码。"
+                status = context.getString(R.string.scan_no_qr)
             } else {
                 submit(raw)
             }
@@ -175,9 +177,9 @@ fun ScanScreen(
     if (missingSecretToml != null) {
         AlertDialog(
             onDismissRequest = { missingSecretToml = null },
-            title = { Text("缺少密钥") },
+            title = { Text(stringResource(R.string.scan_missing_secret_title)) },
             text = {
-                Text("这个配置不包含网络密钥。导入后请打开网络编辑页补填密钥，否则无法连接。")
+                Text(stringResource(R.string.scan_missing_secret_text))
             },
             confirmButton = {
                 TextButton(
@@ -186,11 +188,11 @@ fun ScanScreen(
                         missingSecretToml = null
                         if (toml != null) performImport(toml, false)
                     },
-                ) { Text("仍要导入", color = MaterialTheme.colorScheme.primary) }
+                ) { Text(stringResource(R.string.scan_import_anyway), color = MaterialTheme.colorScheme.primary) }
             },
             dismissButton = {
                 TextButton(onClick = { missingSecretToml = null }) {
-                    Text("取消", color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.action_cancel), color = MaterialTheme.colorScheme.primary)
                 }
             },
             containerColor = MaterialTheme.colorScheme.surface,
@@ -204,8 +206,8 @@ fun ScanScreen(
     ) {
         item {
             ScreenHeader(
-                title = "扫码导入",
-                subtitle = "二维码、相册图片或分享链接",
+                title = stringResource(R.string.scan_title),
+                subtitle = stringResource(R.string.scan_subtitle),
                 onBack = onBack,
             )
         }
@@ -246,11 +248,11 @@ fun ScanScreen(
             } else {
                 EmptyGlassCard(
                     text = when {
-                        cameraFailed -> "相机无法启动（模拟器可能没有相机）。请用相册或粘贴链接导入。"
-                        !hasCamera -> "这台设备没有可用相机。请用相册或粘贴链接导入。"
-                        else -> "相机权限未授予。请用相册或粘贴链接导入。"
+                        cameraFailed -> stringResource(R.string.scan_camera_failed)
+                        !hasCamera -> stringResource(R.string.scan_no_camera)
+                        else -> stringResource(R.string.scan_camera_not_granted)
                     },
-                    actionText = if (hasCamera && !cameraGranted) "授予相机权限" else null,
+                    actionText = if (hasCamera && !cameraGranted) stringResource(R.string.scan_grant_camera) else null,
                     onAction = {
                         permissionLauncher.launch(Manifest.permission.CAMERA)
                     },
@@ -261,9 +263,9 @@ fun ScanScreen(
         item {
             Text(
                 text = if (hasCamera && cameraGranted && !cameraFailed) {
-                    "把二维码放进取景框，识别后会自动导入。"
+                    stringResource(R.string.scan_hint_camera)
                 } else {
-                    "无法使用相机时的备用方式："
+                    stringResource(R.string.scan_hint_fallback)
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
@@ -273,7 +275,7 @@ fun ScanScreen(
 
         item {
             PillButton(
-                text = "从相册选图",
+                text = stringResource(R.string.scan_pick_image),
                 onClick = {
                     galleryLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
@@ -288,7 +290,7 @@ fun ScanScreen(
             GlassTextField(
                 value = pasted,
                 onValueChange = { pasted = it },
-                label = "粘贴分享链接或 TOML",
+                label = stringResource(R.string.scan_paste_label),
                 placeholder = "timiao://import?v=1&d=…",
                 singleLine = false,
                 minLines = 2,
@@ -299,13 +301,13 @@ fun ScanScreen(
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PillButton(
-                    text = if (busy) "正在导入…" else "导入",
+                    text = if (busy) stringResource(R.string.scan_importing) else stringResource(R.string.action_import),
                     onClick = { submit(pasted) },
                     enabled = !busy && pasted.isNotBlank(),
                     modifier = Modifier.weight(1f),
                 )
                 PillButton(
-                    text = "清空",
+                    text = stringResource(R.string.scan_clear),
                     onClick = {
                         pasted = ""
                         status = null
@@ -318,7 +320,7 @@ fun ScanScreen(
         }
         item {
             Text(
-                text = "也可以直接从聊天软件分享 .toml 文件给缇喵，或在浏览器打开分享链接。",
+                text = stringResource(R.string.scan_footer),
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 4.dp),

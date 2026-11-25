@@ -249,14 +249,14 @@ object AutoConnect {
         val target = decision.networkId ?: globalTarget(context)
         if (target == null) {
             Log.w(TAG, "connect decision has no target network")
-            notifyOnce(context, "no-target", NOTIF_BLOCKED, "自动连接待命", "请先在缇喵中选择一个网络。")
+            notifyOnce(context, "no-target", NOTIF_BLOCKED, context.getString(R.string.auto_notif_blocked_title), context.getString(R.string.auto_notif_blocked_text))
             return
         }
         if (TimiaoVpnService.prepareIntent(context) != null) {
             notifyOnce(
                 context, "consent", NOTIF_CONSENT,
-                "需要授权 VPN",
-                "点按打开缇喵并允许 VPN，自动连接才能生效。",
+                context.getString(R.string.auto_notif_vpn_title),
+                context.getString(R.string.auto_notif_vpn_text),
             )
             return
         }
@@ -284,8 +284,8 @@ object AutoConnect {
             Log.w(TAG, "background start blocked", e)
             notifyOnce(
                 context, "blocked", NOTIF_BLOCKED,
-                "自动连接等待中",
-                "系统限制了后台启动。点按打开缇喵完成连接。",
+                context.getString(R.string.auto_notif_waiting_title),
+                context.getString(R.string.auto_notif_waiting_text),
             )
         }
     }
@@ -304,16 +304,16 @@ object AutoConnect {
             if (rule.keepNotification) {
                 notifyOnce(
                     context, "disconnected", NOTIF_DISCONNECTED,
-                    "已按规则断开",
-                    "当前网络不再满足自动连接条件。",
+                    context.getString(R.string.auto_notif_disconnected_title),
+                    context.getString(R.string.auto_notif_disconnected_text),
                 )
             }
         } catch (e: Exception) {
             Log.w(TAG, "background stop blocked", e)
             notifyOnce(
                 context, "blocked", NOTIF_BLOCKED,
-                "自动断开等待中",
-                "系统限制了后台操作。点按打开缇喵处理。",
+                context.getString(R.string.auto_notif_disconnect_waiting_title),
+                context.getString(R.string.auto_notif_disconnect_waiting_text),
             )
         }
     }
@@ -355,7 +355,7 @@ object AutoConnect {
         runCatching {
             val manager = context.getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL, "自动连接", NotificationManager.IMPORTANCE_DEFAULT),
+                NotificationChannel(CHANNEL, context.getString(R.string.auto_channel_name), NotificationManager.IMPORTANCE_DEFAULT),
             )
             val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
                 ?: Intent(context, MainActivity::class.java)

@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.timiao.et.R
 import app.timiao.et.core.NetworkConfig
 import app.timiao.et.core.PortForward
 import app.timiao.et.core.ProxyNetwork
@@ -77,6 +79,7 @@ import app.timiao.et.ui.data.DefaultListeners
 import app.timiao.et.ui.data.DefaultProtocols
 import app.timiao.et.ui.data.EncryptionAlgorithms
 import app.timiao.et.ui.data.FlagGroups
+import app.timiao.et.ui.data.flagGroupTitleRes
 import app.timiao.et.ui.data.HIDDEN_SECRET
 import app.timiao.et.ui.data.PendingImport
 import app.timiao.et.ui.data.PortForwardDraft
@@ -102,6 +105,7 @@ import app.timiao.et.ui.data.toDraft
 import app.timiao.et.ui.data.toUi
 import app.timiao.et.ui.data.toConfig
 import app.timiao.et.ui.data.toPortForward
+import app.timiao.et.ui.data.tomlErrorMessage
 import app.timiao.et.ui.theme.LocalGlassColors
 import app.timiao.et.ui.util.copyToClipboard
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -190,7 +194,7 @@ fun NetworkEditScreen(
                 val ui = pending.toUi().copy(id = targetId)
                 form = ui
                 texts = Texts.of(ui)
-                Toast.makeText(context, "已从文件导入，检查后点保存", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.edit_imported_from_file), Toast.LENGTH_SHORT).show()
                 return@LaunchedEffect
             }
             val loaded = if (networkId == "new") {
@@ -210,7 +214,7 @@ fun NetworkEditScreen(
     val current = form
     if (current == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("加载中…", color = g.muted)
+            Text(stringResource(R.string.edit_load), color = g.muted)
         }
         return
     }
@@ -228,7 +232,7 @@ fun NetworkEditScreen(
     var showDelete by rememberSaveable { mutableStateOf(false) }
     var showDiscard by rememberSaveable { mutableStateOf(false) }
     var importText by rememberSaveable { mutableStateOf("") }
-    var openGroups by rememberSaveable { mutableStateOf(listOf("基础", "连接")) }
+    var openGroups by rememberSaveable { mutableStateOf(listOf("basic", "connection")) }
     var showSecurePrivate by rememberSaveable { mutableStateOf(false) }
     var showPortalPrivate by rememberSaveable { mutableStateOf(false) }
     var clientConfig by remember { mutableStateOf<String?>(null) }
@@ -237,6 +241,8 @@ fun NetworkEditScreen(
     var pendingExportText by remember { mutableStateOf("") }
     var pendingExportName by remember { mutableStateOf("easytier.toml") }
     var conflictImport by remember { mutableStateOf<NetworkConfig?>(null) }
+    val generateKeyFirstText = stringResource(R.string.edit_generate_key_first)
+    val generateFailedText = stringResource(R.string.edit_generate_failed)
 
     fun toggleGroup(name: String) {
         openGroups = if (openGroups.contains(name)) openGroups - name else openGroups + name
@@ -283,7 +289,7 @@ fun NetworkEditScreen(
             applyImported(parsed, saveAsNew = false)
             showImport = false
             importText = ""
-            Toast.makeText(context, "已导入，检查后点保存", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.edit_imported), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -304,12 +310,12 @@ fun NetworkEditScreen(
                 readTomlUri(context, uri)
                     .onSuccess { text ->
                         importText = text
-                        importError = runCatching { TomlCodec.importToml(text) }.exceptionOrNull()?.message
+                        importError = tomlErrorMessage(context, runCatching { TomlCodec.importToml(text) }.exceptionOrNull())
                         showImport = true
                     }
                     .onFailure { error ->
                         importText = ""
-                        importError = error.message ?: "读取文件失败"
+                        importError = error.message ?: context.getString(R.string.networks_read_failed)
                         showImport = true
                     }
             }
@@ -324,13 +330,13 @@ fun NetworkEditScreen(
                 val result = runCatching {
                     withContext(Dispatchers.IO) {
                         val stream = context.contentResolver.openOutputStream(uri)
-                            ?: throw IllegalStateException("无法写入文件")
+                            ?: throw IllegalStateException(context.getString(R.string.edit_cannot_write_file))
                         stream.use { it.write(pendingExportText.toByteArray(Charsets.UTF_8)) }
                     }
                 }
                 Toast.makeText(
                     context,
-                    if (result.isSuccess) "已保存 ${pendingExportName}" else "保存失败：${result.exceptionOrNull()?.message}",
+                    if (result.isSuccess) context.getString(R.string.edit_saved_file, pendingExportName) else context.getString(R.string.edit_save_failed, result.exceptionOrNull()?.message),
                     Toast.LENGTH_SHORT,
                 ).show()
             }
@@ -341,7 +347,7 @@ fun NetworkEditScreen(
         val ui = currentUi()
         if (ui.name.isBlank()) {
             saveAttempted = true
-            Toast.makeText(context, "网络名称不能为空", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.edit_name_required), Toast.LENGTH_SHORT).show()
             return
         }
         val real = vm.exportToml(ui)
@@ -357,10 +363,10 @@ fun NetworkEditScreen(
         val parsed = try {
             parseTomlRestored()
         } catch (error: TomlParseException) {
-            tomlError = error.message
+            tomlError = tomlErrorMessage(context, error)
             return
         } catch (error: Exception) {
-            tomlError = "解析失败：${error.message}"
+            tomlError = context.getString(R.string.edit_parse_failed, error.message)
             return
         }
         applyParsed(parsed)
@@ -373,19 +379,19 @@ fun NetworkEditScreen(
             val parsed = try {
                 parseTomlRestored()
             } catch (error: TomlParseException) {
-                tomlError = error.message
+                tomlError = tomlErrorMessage(context, error)
                 return
             } catch (error: Exception) {
-                tomlError = "解析失败：${error.message}"
+                tomlError = context.getString(R.string.edit_parse_failed, error.message)
                 return
             }
             if (parsed.networkName.isBlank()) {
-                tomlError = "网络名称不能为空"
+                tomlError = context.getString(R.string.edit_name_required)
                 return
             }
             val ui = parsed.toUi().copy(id = current.id)
             vm.saveNetwork(ui)
-            Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.edit_saved), Toast.LENGTH_SHORT).show()
             onBack()
             return
         }
@@ -393,11 +399,11 @@ fun NetworkEditScreen(
         val ui = currentUi()
         val errors = validationErrors(ui)
         if (errors.isNotEmpty()) {
-            Toast.makeText(context, "有 ${errors.size} 处输入无效，请检查提示", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.edit_invalid_count, errors.size), Toast.LENGTH_SHORT).show()
             return
         }
         vm.saveNetwork(ui)
-        Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.edit_saved), Toast.LENGTH_SHORT).show()
         onBack()
     }
 
@@ -415,39 +421,39 @@ fun NetworkEditScreen(
         if (openAction == "scan") onScan()
     }
 
-    val nameError = if (form!!.name.isBlank()) "网络名称不能为空" else null
-    val ipv4Error = form!!.ipv4.takeIf { it.isNotBlank() && !isValidCidr(it) }?.let { "格式应为 10.126.126.5/24" }
-    val ipv6Error = form!!.ipv6.takeIf { it.isNotBlank() && !isValidCidr(it) }?.let { "格式应为 fd00::5/64" }
+    val nameError = if (form!!.name.isBlank()) stringResource(R.string.edit_name_required) else null
+    val ipv4Error = form!!.ipv4.takeIf { it.isNotBlank() && !isValidCidr(it) }?.let { stringResource(R.string.edit_err_ipv4_format) }
+    val ipv6Error = form!!.ipv6.takeIf { it.isNotBlank() && !isValidCidr(it) }?.let { stringResource(R.string.edit_err_ipv6_format) }
     val mtuError = form!!.mtu.takeIf { it.isNotBlank() }?.let {
         val value = it.toIntOrNull()
-        if (value == null || value !in 400..1380) "MTU 范围 400-1380" else null
+        if (value == null || value !in 400..1380) stringResource(R.string.edit_err_mtu_range) else null
     }
     val recvLimitError = form!!.instanceRecvBpsLimit.takeIf { it.isNotBlank() && it.toLongOrNull() == null }
-        ?.let { "请输入整数（字节/秒）" }
+        ?.let { stringResource(R.string.edit_err_integer_bps) }
     val relayLimitError = form!!.foreignRelayBpsLimit.takeIf { it.isNotBlank() && it.toLongOrNull() == null }
-        ?.let { "请输入整数（字节/秒）" }
+        ?.let { stringResource(R.string.edit_err_integer_bps) }
     val threadCountError = form!!.multiThreadCount.takeIf { it.isNotBlank() }?.let {
         val value = it.toIntOrNull()
-        if (value == null || value < 1) "请输入正整数" else null
+        if (value == null || value < 1) stringResource(R.string.edit_err_positive_int) else null
     }
     val socketMarkError = form!!.socketMark.takeIf { it.isNotBlank() && it.toIntOrNull() == null }
-        ?.let { "请输入整数" }
+        ?.let { stringResource(R.string.edit_err_integer) }
     val socksError = form!!.socks5.takeIf { it.isNotBlank() && !SocksPattern.matches(it) }
-        ?.let { "格式应为 socks5://0.0.0.0:1080" }
-    val serversError = if (firstBadUrl(parseLines(texts.servers))) "地址需带协议，例如 udp://host:11010" else null
-    val listenersError = if (firstBadListener(parseLines(texts.listeners))) "监听器格式：udp://0.0.0.0:11010" else null
-    val mappedError = if (firstBadListener(parseLines(texts.mappedListeners))) "格式：tcp://公网地址:端口" else null
+        ?.let { stringResource(R.string.edit_err_socks5) }
+    val serversError = if (firstBadUrl(parseLines(texts.servers))) stringResource(R.string.edit_err_server_protocol) else null
+    val listenersError = if (firstBadListener(parseLines(texts.listeners))) stringResource(R.string.edit_err_listener) else null
+    val mappedError = if (firstBadListener(parseLines(texts.mappedListeners))) stringResource(R.string.edit_err_mapped) else null
     val portal = form!!.vpnPortal
     val portalListenError = if (portal != null && !isValidHostPort(portal.wireguardListen)) {
-        "格式应为 host:port，例如 0.0.0.0:22022"
+        stringResource(R.string.edit_err_host_port)
     } else {
         null
     }
     val secureKeyError = form!!.secureMode?.localPrivateKey?.takeIf { it.isNotBlank() }?.let {
-        if (base64Size(it) != 32) "私钥需为 32 字节 Base64" else null
+        if (base64Size(it) != 32) stringResource(R.string.edit_err_key_base64) else null
     }
     val portalKeyError = portal?.wireguardPrivateKey?.takeIf { it.isNotBlank() }?.let {
-        if (base64Size(it) != 32) "私钥需为 32 字节 Base64" else null
+        if (base64Size(it) != 32) stringResource(R.string.edit_err_key_base64) else null
     }
 
     LazyColumn(
@@ -457,13 +463,13 @@ fun NetworkEditScreen(
     ) {
         item {
             ScreenHeader(
-                title = if (networkId == "new") "新建网络" else current.name.ifBlank { "编辑网络" },
-                subtitle = if (dirty) "有未保存的修改" else "改动在点保存后生效",
+                title = if (networkId == "new") stringResource(R.string.edit_title_new) else current.name.ifBlank { stringResource(R.string.edit_title_edit) },
+                subtitle = stringResource(if (dirty) R.string.edit_dirty else R.string.edit_clean),
                 onBack = ::requestBack,
                 action = {
                     Box(Modifier.width(88.dp)) {
                         PillButton(
-                            "保存",
+                            stringResource(R.string.action_save),
                             onClick = ::performSave,
                             enabled = saveEnabled,
                             modifier = Modifier.fillMaxWidth().alpha(if (saveEnabled) 1f else 0.5f),
@@ -475,7 +481,7 @@ fun NetworkEditScreen(
 
         item {
             SegmentedGlass(
-                options = listOf("表单", "TOML"),
+                options = listOf(stringResource(R.string.edit_tab_form), "TOML"),
                 selected = if (mode == EditMode.Form) 0 else 1,
                 onSelect = { index ->
                     when {
@@ -489,8 +495,8 @@ fun NetworkEditScreen(
         if (mode == EditMode.Toml) {
             item {
                 GlassSwitchRow(
-                    title = "显示敏感字段",
-                    subtitle = "关闭时密钥与私钥显示为 $HIDDEN_SECRET，保存时沿用原值",
+                    title = stringResource(R.string.edit_show_secrets),
+                    subtitle = stringResource(R.string.edit_hide_secrets_sub, HIDDEN_SECRET),
                     checked = showTomlSecrets,
                     onCheckedChange = { checked ->
                         if (checked) {
@@ -515,7 +521,7 @@ fun NetworkEditScreen(
                 GlassTextField(
                     value = tomlText,
                     onValueChange = { tomlText = it; tomlError = null },
-                    label = "TOML 原文（保存时以这里为准）",
+                    label = stringResource(R.string.edit_toml_source_label),
                     placeholder = "[network_identity]\nnetwork_name = \"home-mesh\"",
                     singleLine = false,
                     minLines = 18,
@@ -533,7 +539,7 @@ fun NetworkEditScreen(
                     )
                 } else {
                     Text(
-                        text = "切回表单会先解析；解析失败时保留原文并显示行号。",
+                        text = stringResource(R.string.edit_toml_hint),
                         color = g.muted,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 14.dp),
@@ -542,17 +548,17 @@ fun NetworkEditScreen(
             }
             item {
                 PillButton(
-                    "解析并切回表单",
+                    stringResource(R.string.edit_parse_back),
                     onClick = ::leaveTomlMode,
                     secondary = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
         } else {
-            item { SectionLabel("基础") }
+            item { SectionLabel(stringResource(R.string.edit_section_basic)) }
             item {
                 Field(
-                    label = "网络名称",
+                    label = stringResource(R.string.edit_name),
                     value = form!!.name,
                     onChange = { form = form!!.copy(name = it) },
                     placeholder = "home-mesh",
@@ -578,16 +584,16 @@ fun NetworkEditScreen(
             }
             item {
                 Field(
-                    label = "主机名",
+                    label = stringResource(R.string.edit_hostname),
                     value = form!!.hostname,
                     onChange = { form = form!!.copy(hostname = it) },
-                    placeholder = "留空使用系统主机名",
+                    placeholder = stringResource(R.string.edit_hostname_placeholder),
                     focus = focus,
                 )
             }
             item {
                 Field(
-                    label = "服务器（每行一个）",
+                    label = stringResource(R.string.edit_servers),
                     value = texts.servers,
                     onChange = { texts = texts.copy(servers = it) },
                     placeholder = "tcp://public.easytier.top:11010",
@@ -602,8 +608,8 @@ fun NetworkEditScreen(
             }
             item {
                 GlassSwitchRow(
-                    title = "自动分配 IP（DHCP）",
-                    subtitle = "关闭后手动填写静态地址",
+                    title = stringResource(R.string.edit_dhcp),
+                    subtitle = stringResource(R.string.edit_dhcp_sub),
                     checked = form!!.dhcp,
                     onCheckedChange = { form = form!!.copy(dhcp = it) },
                 )
@@ -616,16 +622,16 @@ fun NetworkEditScreen(
                             .glass(RoundedCornerShape(18.dp), GlassLevel.Subtle)
                             .padding(horizontal = 14.dp, vertical = 11.dp),
                     ) {
-                        Text("静态 IPv4 / 前缀", style = MaterialTheme.typography.labelSmall, color = g.muted)
+                        Text(stringResource(R.string.edit_static_ipv4), style = MaterialTheme.typography.labelSmall, color = g.muted)
                         Text(
-                            "DHCP 已开启，地址由网络自动分配",
+                            stringResource(R.string.edit_dhcp_on_note),
                             style = MaterialTheme.typography.bodyMedium,
                             color = g.muted,
                         )
                     }
                 } else {
                     Field(
-                        label = "静态 IPv4 / 前缀",
+                        label = stringResource(R.string.edit_static_ipv4),
                         value = form!!.ipv4,
                         onChange = { form = form!!.copy(ipv4 = it) },
                         placeholder = "10.126.126.5/24",
@@ -638,7 +644,7 @@ fun NetworkEditScreen(
             }
             item {
                 Field(
-                    label = "静态 IPv6 / 前缀（可留空）",
+                    label = stringResource(R.string.edit_static_ipv6),
                     value = form!!.ipv6,
                     onChange = { form = form!!.copy(ipv6 = it) },
                     placeholder = "fd00::5/64",
@@ -649,23 +655,23 @@ fun NetworkEditScreen(
                 )
             }
 
-            item { SectionLabel("高级") }
+            item { SectionLabel(stringResource(R.string.edit_section_advanced)) }
             item { perAppSlot() }
 
             // 身份与安全
             item {
                 ExpandableHeader(
-                    title = "身份与安全",
-                    subtitle = "安全模式、Socks5、IPv6 公网",
-                    expanded = openGroups.contains("身份与安全"),
-                    onToggle = { toggleGroup("身份与安全") },
+                    title = stringResource(R.string.edit_group_security),
+                    subtitle = stringResource(R.string.edit_group_security_sub),
+                    expanded = openGroups.contains("security"),
+                    onToggle = { toggleGroup("security") },
                 )
             }
-            if (openGroups.contains("身份与安全")) {
+            if (openGroups.contains("security")) {
                 item {
                     GlassSwitchRow(
-                        title = "安全模式",
-                        subtitle = "节点间使用 Noise 加密握手与身份认证",
+                        title = stringResource(R.string.edit_secure_mode),
+                        subtitle = stringResource(R.string.edit_secure_mode_sub),
                         checked = form!!.secureMode?.enabled == true,
                         onCheckedChange = { enabled ->
                             form = form!!.copy(
@@ -682,7 +688,7 @@ fun NetworkEditScreen(
                     item {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Field(
-                                label = "本机私钥（默认隐藏）",
+                                label = stringResource(R.string.edit_local_private_key),
                                 value = form!!.secureMode?.localPrivateKey.orEmpty(),
                                 onChange = { key ->
                                     form = form!!.copy(
@@ -694,7 +700,7 @@ fun NetworkEditScreen(
                                         ),
                                     )
                                 },
-                                placeholder = "Base64 32 字节",
+                                placeholder = "Base64 (32 bytes)",
                                 mono = true,
                                 visualTransformation = if (showSecurePrivate) {
                                     VisualTransformation.None
@@ -707,7 +713,7 @@ fun NetworkEditScreen(
                             )
                             Spacer(Modifier.width(8.dp))
                             PillButton(
-                                if (showSecurePrivate) "隐藏" else "显示",
+                                stringResource(if (showSecurePrivate) R.string.action_hide else R.string.action_show),
                                 onClick = { showSecurePrivate = !showSecurePrivate },
                                 secondary = true,
                             )
@@ -716,7 +722,7 @@ fun NetworkEditScreen(
                     item {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PillButton(
-                                "生成密钥",
+                                stringResource(R.string.edit_generate_key),
                                 onClick = {
                                     val key = WireGuardKeys.generatePrivateKey()
                                     form = form!!.copy(
@@ -734,7 +740,7 @@ fun NetworkEditScreen(
                 }
                 item {
                     Field(
-                        label = "Socks5 服务器（留空关闭）",
+                        label = stringResource(R.string.edit_socks5),
                         value = form!!.socks5,
                         onChange = { form = form!!.copy(socks5 = it) },
                         placeholder = "socks5://0.0.0.0:1080",
@@ -746,8 +752,8 @@ fun NetworkEditScreen(
                 }
                 item {
                     GlassSwitchRow(
-                        title = "自动获取公网 IPv6",
-                        subtitle = "从共享 IPv6 子网的对等节点获取地址",
+                        title = stringResource(R.string.edit_ipv6_public),
+                        subtitle = stringResource(R.string.edit_ipv6_public_sub),
                         checked = form!!.ipv6PublicAddrAuto,
                         onCheckedChange = { form = form!!.copy(ipv6PublicAddrAuto = it) },
                     )
@@ -757,16 +763,16 @@ fun NetworkEditScreen(
             // 网络与路由
             item {
                 ExpandableHeader(
-                    title = "网络与路由",
-                    subtitle = "监听器、映射、出口节点、自定义路由、白名单",
-                    expanded = openGroups.contains("网络与路由"),
-                    onToggle = { toggleGroup("网络与路由") },
+                    title = stringResource(R.string.edit_group_network),
+                    subtitle = stringResource(R.string.edit_group_network_sub),
+                    expanded = openGroups.contains("network"),
+                    onToggle = { toggleGroup("network") },
                 )
             }
-            if (openGroups.contains("网络与路由")) {
+            if (openGroups.contains("network")) {
                 item {
                     Field(
-                        label = "监听器（每行一个）",
+                        label = stringResource(R.string.edit_listeners),
                         value = texts.listeners,
                         onChange = { texts = texts.copy(listeners = it) },
                         placeholder = "udp://0.0.0.0:11010",
@@ -781,7 +787,7 @@ fun NetworkEditScreen(
                 }
                 item {
                     Field(
-                        label = "监听映射（每行一个公网地址）",
+                        label = stringResource(R.string.edit_mapped),
                         value = texts.mappedListeners,
                         onChange = { texts = texts.copy(mappedListeners = it) },
                         placeholder = "tcp://123.123.123.123:11223",
@@ -796,7 +802,7 @@ fun NetworkEditScreen(
                 }
                 item {
                     Field(
-                        label = "出口节点（每行一个虚拟 IP，按顺序优先）",
+                        label = stringResource(R.string.edit_exit_nodes),
                         value = texts.exitNodes,
                         onChange = { texts = texts.copy(exitNodes = it) },
                         placeholder = "10.126.126.1",
@@ -810,8 +816,8 @@ fun NetworkEditScreen(
                 }
                 item {
                     GlassSwitchRow(
-                        title = "自定义路由",
-                        subtitle = "手动分配路由 CIDR，将禁用子网代理传播",
+                        title = stringResource(R.string.edit_manual_routes),
+                        subtitle = stringResource(R.string.edit_manual_routes_sub),
                         checked = form!!.manualRoutesEnabled,
                         onCheckedChange = { form = form!!.copy(manualRoutesEnabled = it) },
                     )
@@ -819,7 +825,7 @@ fun NetworkEditScreen(
                 if (form!!.manualRoutesEnabled) {
                     item {
                         Field(
-                            label = "路由 CIDR（每行一个）",
+                            label = stringResource(R.string.edit_routes),
                             value = texts.routes,
                             onChange = { texts = texts.copy(routes = it) },
                             placeholder = "192.168.0.0/16",
@@ -828,7 +834,7 @@ fun NetworkEditScreen(
                             maxLines = 4,
                             mono = true,
                             error = parseLines(texts.routes).firstOrNull { !isValidCidr(it) }?.let {
-                                "无效 CIDR：$it"
+                                stringResource(R.string.edit_invalid_cidr_value, it)
                             },
                             keyboardType = KeyboardType.Uri,
                             focus = focus,
@@ -837,8 +843,8 @@ fun NetworkEditScreen(
                 }
                 item {
                     GlassSwitchRow(
-                        title = "中继网络白名单",
-                        subtitle = "关闭时转发所有网络；开启后为空表示禁止转发",
+                        title = stringResource(R.string.edit_whitelist),
+                        subtitle = stringResource(R.string.edit_whitelist_sub),
                         checked = form!!.relayNetworkWhitelistEnabled,
                         onCheckedChange = { form = form!!.copy(relayNetworkWhitelistEnabled = it) },
                     )
@@ -846,7 +852,7 @@ fun NetworkEditScreen(
                 if (form!!.relayNetworkWhitelistEnabled) {
                     item {
                         Field(
-                            label = "白名单网络名（每行一个，支持 * 后缀）",
+                            label = stringResource(R.string.edit_whitelist_names),
                             value = texts.whitelist,
                             onChange = { texts = texts.copy(whitelist = it) },
                             placeholder = "net1\ndef*",
@@ -860,8 +866,8 @@ fun NetworkEditScreen(
                 }
                 item {
                     GlassSwitchRow(
-                        title = "禁用 UPnP",
-                        subtitle = "不自动映射监听端口",
+                        title = stringResource(R.string.edit_disable_upnp),
+                        subtitle = stringResource(R.string.edit_disable_upnp_sub),
                         checked = form!!.flags["disable_upnp"] ?: false,
                         onCheckedChange = { form = form!!.copy(flags = form!!.flags + ("disable_upnp" to it)) },
                     )
@@ -871,16 +877,16 @@ fun NetworkEditScreen(
             // STUN
             item {
                 ExpandableHeader(
-                    title = "STUN 服务器",
-                    subtitle = "自定义 NAT 探测服务器",
-                    expanded = openGroups.contains("STUN"),
-                    onToggle = { toggleGroup("STUN") },
+                    title = stringResource(R.string.edit_stun_title),
+                    subtitle = stringResource(R.string.edit_stun_sub),
+                    expanded = openGroups.contains("stun"),
+                    onToggle = { toggleGroup("stun") },
                 )
             }
-            if (openGroups.contains("STUN")) {
+            if (openGroups.contains("stun")) {
                 item {
                     Field(
-                        label = "STUN 服务器（每行一个）",
+                        label = stringResource(R.string.edit_stun_servers),
                         value = texts.stunServers,
                         onChange = { texts = texts.copy(stunServers = it) },
                         placeholder = "stun.example.com:3478",
@@ -897,17 +903,17 @@ fun NetworkEditScreen(
             // 子网代理
             item {
                 ExpandableHeader(
-                    title = "子网代理",
-                    subtitle = "CIDR 与可选映射 CIDR",
-                    expanded = openGroups.contains("子网代理"),
-                    onToggle = { toggleGroup("子网代理") },
+                    title = stringResource(R.string.edit_group_proxy),
+                    subtitle = stringResource(R.string.edit_group_proxy_sub),
+                    expanded = openGroups.contains("proxy"),
+                    onToggle = { toggleGroup("proxy") },
                 )
             }
-            if (openGroups.contains("子网代理")) {
+            if (openGroups.contains("proxy")) {
                 items(form!!.proxyNetworks.size) { index ->
                     val proxy = form!!.proxyNetworks[index]
-                    val cidrError = if (!isValidCidr(proxy.cidr)) "无效 CIDR" else null
-                    val mappedError = proxy.mappedCidr?.takeIf { !isValidCidr(it) }?.let { "无效 CIDR" }
+                    val cidrError = if (!isValidCidr(proxy.cidr)) stringResource(R.string.edit_invalid_cidr) else null
+                    val mappedError = proxy.mappedCidr?.takeIf { !isValidCidr(it) }?.let { stringResource(R.string.edit_invalid_cidr) }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -916,7 +922,7 @@ fun NetworkEditScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Field(
-                            label = "代理 CIDR",
+                            label = stringResource(R.string.edit_proxy_cidr),
                             value = proxy.cidr,
                             onChange = { value ->
                                 form = form!!.copy(
@@ -932,7 +938,7 @@ fun NetworkEditScreen(
                             focus = focus,
                         )
                         Field(
-                            label = "映射 CIDR（可留空）",
+                            label = stringResource(R.string.edit_mapped_cidr),
                             value = proxy.mappedCidr.orEmpty(),
                             onChange = { value ->
                                 form = form!!.copy(
@@ -951,12 +957,12 @@ fun NetworkEditScreen(
                             form = form!!.copy(
                                 proxyNetworks = form!!.proxyNetworks.filterIndexed { i, _ -> i != index },
                             )
-                        }) { Text("删除此条") }
+                        }) { Text(stringResource(R.string.edit_remove_row)) }
                     }
                 }
                 item {
                     PillButton(
-                        "添加子网代理",
+                        stringResource(R.string.edit_add_proxy),
                         onClick = {
                             form = form!!.copy(proxyNetworks = form!!.proxyNetworks + ProxyNetwork(cidr = ""))
                         },
@@ -969,13 +975,13 @@ fun NetworkEditScreen(
             // 端口转发
             item {
                 ExpandableHeader(
-                    title = "端口转发",
-                    subtitle = "协议 + 绑定地址 + 目标地址",
-                    expanded = openGroups.contains("端口转发"),
-                    onToggle = { toggleGroup("端口转发") },
+                    title = stringResource(R.string.edit_group_portforward),
+                    subtitle = stringResource(R.string.edit_group_portforward_sub),
+                    expanded = openGroups.contains("portforward"),
+                    onToggle = { toggleGroup("portforward") },
                 )
             }
-            if (openGroups.contains("端口转发")) {
+            if (openGroups.contains("portforward")) {
                 items(form!!.portForwards.size) { index ->
                     val forward = form!!.portForwards[index].toDraft()
                     val error = if (saveAttempted) forward.error() else forward.error()?.takeIf {
@@ -989,7 +995,7 @@ fun NetworkEditScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         GlassDropdownRow(
-                            label = "协议",
+                            label = stringResource(R.string.edit_protocol),
                             current = forward.proto,
                             options = listOf("tcp", "udp"),
                             optionLabel = { it },
@@ -1003,7 +1009,7 @@ fun NetworkEditScreen(
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Field(
-                                label = "绑定地址",
+                                label = stringResource(R.string.edit_bind_address),
                                 value = forward.bindIp,
                                 onChange = { value ->
                                     form = form!!.copy(
@@ -1019,7 +1025,7 @@ fun NetworkEditScreen(
                                 modifier = Modifier.weight(1.6f),
                             )
                             Field(
-                                label = "端口",
+                                label = stringResource(R.string.edit_port),
                                 value = forward.bindPort,
                                 onChange = { value ->
                                     form = form!!.copy(
@@ -1037,7 +1043,7 @@ fun NetworkEditScreen(
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Field(
-                                label = "目标地址",
+                                label = stringResource(R.string.edit_target_address),
                                 value = forward.dstIp,
                                 onChange = { value ->
                                     form = form!!.copy(
@@ -1053,7 +1059,7 @@ fun NetworkEditScreen(
                                 modifier = Modifier.weight(1.6f),
                             )
                             Field(
-                                label = "端口",
+                                label = stringResource(R.string.edit_port),
                                 value = forward.dstPort,
                                 onChange = { value ->
                                     form = form!!.copy(
@@ -1069,17 +1075,17 @@ fun NetworkEditScreen(
                                 modifier = Modifier.weight(1f),
                             )
                         }
-                        if (error != null) InlineError(error)
+                        if (error != null) InlineErrorRes(error)
                         TextButton(onClick = {
                             form = form!!.copy(
                                 portForwards = form!!.portForwards.filterIndexed { i, _ -> i != index },
                             )
-                        }) { Text("删除此条") }
+                        }) { Text(stringResource(R.string.edit_remove_row)) }
                     }
                 }
                 item {
                     PillButton(
-                        "添加端口转发",
+                        stringResource(R.string.edit_add_portforward),
                         onClick = {
                             form = form!!.copy(portForwards = form!!.portForwards + PortForward("", "", "tcp"))
                         },
@@ -1092,17 +1098,17 @@ fun NetworkEditScreen(
             // VPN portal
             item {
                 ExpandableHeader(
-                    title = "VPN portal（WireGuard）",
-                    subtitle = "监听地址、私钥、客户端配置",
-                    expanded = openGroups.contains("VPN"),
-                    onToggle = { toggleGroup("VPN") },
+                    title = stringResource(R.string.edit_group_vpn),
+                    subtitle = stringResource(R.string.edit_group_vpn_sub),
+                    expanded = openGroups.contains("vpn"),
+                    onToggle = { toggleGroup("vpn") },
                 )
             }
-            if (openGroups.contains("VPN")) {
+            if (openGroups.contains("vpn")) {
                 item {
                     GlassSwitchRow(
-                        title = "启用 WireGuard",
-                        subtitle = "启动节点后，客户端可用生成的配置连接",
+                        title = stringResource(R.string.edit_enable_wireguard),
+                        subtitle = stringResource(R.string.edit_enable_wireguard_sub),
                         checked = form!!.vpnPortal != null,
                         onCheckedChange = { enabled ->
                             form = form!!.copy(
@@ -1122,7 +1128,7 @@ fun NetworkEditScreen(
                 form!!.vpnPortal?.let { portal ->
                     item {
                         Field(
-                            label = "监听地址 host:port",
+                            label = stringResource(R.string.edit_listen_host_port),
                             value = portal.wireguardListen,
                             onChange = {
                                 form = form!!.copy(vpnPortal = portal.copy(wireguardListen = it))
@@ -1137,14 +1143,14 @@ fun NetworkEditScreen(
                     item {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Field(
-                                label = "服务端私钥（默认隐藏）",
+                                label = stringResource(R.string.edit_server_private_key),
                                 value = portal.wireguardPrivateKey.orEmpty(),
                                 onChange = {
                                     form = form!!.copy(
                                         vpnPortal = portal.copy(wireguardPrivateKey = it.ifBlank { null }),
                                     )
                                 },
-                                placeholder = "Base64 32 字节",
+                                placeholder = "Base64 (32 bytes)",
                                 mono = true,
                                 visualTransformation = if (showPortalPrivate) {
                                     VisualTransformation.None
@@ -1157,7 +1163,7 @@ fun NetworkEditScreen(
                             )
                             Spacer(Modifier.width(8.dp))
                             PillButton(
-                                if (showPortalPrivate) "隐藏" else "显示",
+                                stringResource(if (showPortalPrivate) R.string.action_hide else R.string.action_show),
                                 onClick = { showPortalPrivate = !showPortalPrivate },
                                 secondary = true,
                             )
@@ -1166,7 +1172,7 @@ fun NetworkEditScreen(
                     item {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             PillButton(
-                                "生成私钥",
+                                stringResource(R.string.edit_generate_private_key),
                                 onClick = {
                                     form = form!!.copy(
                                         vpnPortal = portal.copy(
@@ -1182,7 +1188,7 @@ fun NetworkEditScreen(
                     if (!WireGuardKeys.canDerivePublicKey()) {
                         item {
                             Text(
-                                text = "当前系统无法派生 X25519 公钥，请在桌面端生成客户端配置。",
+                                text = stringResource(R.string.edit_x25519_unavailable),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = g.warn,
                                 modifier = Modifier.padding(horizontal = 14.dp),
@@ -1199,7 +1205,7 @@ fun NetworkEditScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Field(
-                                label = "设备名称",
+                                label = stringResource(R.string.edit_device_name),
                                 value = client.name,
                                 onChange = { value ->
                                     form = form!!.copy(
@@ -1214,13 +1220,13 @@ fun NetworkEditScreen(
                                 focus = focus,
                             )
                             val nameError = when {
-                                !ClientNamePattern.matches(client.name) -> "限 1-63 个字母、数字、连字符"
-                                portal.clients.count { it.name == client.name } > 1 -> "名称不能重复"
+                                !ClientNamePattern.matches(client.name) -> R.string.edit_name_rule
+                                portal.clients.count { it.name == client.name } > 1 -> R.string.edit_name_duplicate
                                 else -> null
                             }
-                            InlineError(nameError)
+                            InlineErrorRes(nameError)
                             Field(
-                                label = "虚拟 IP / 前缀",
+                                label = stringResource(R.string.edit_virtual_ip),
                                 value = client.virtualIp,
                                 onChange = { value ->
                                     form = form!!.copy(
@@ -1233,12 +1239,12 @@ fun NetworkEditScreen(
                                 },
                                 placeholder = "10.126.126.10/24",
                                 mono = true,
-                                error = if (!isValidCidr(client.virtualIp)) "请输入有效 CIDR" else null,
+                                error = if (!isValidCidr(client.virtualIp)) stringResource(R.string.edit_invalid_cidr_input) else null,
                                 keyboardType = KeyboardType.Uri,
                                 focus = focus,
                             )
                             Field(
-                                label = "ACL 组（空格分隔，可留空）",
+                                label = stringResource(R.string.edit_acl_groups),
                                 value = client.groups.joinToString(" "),
                                 onChange = { value ->
                                     form = form!!.copy(
@@ -1261,11 +1267,11 @@ fun NetworkEditScreen(
                                         clients = portal.clients.filterIndexed { i, _ -> i != index },
                                     ),
                                 )
-                            }) { Text("删除此设备") }
+                            }) { Text(stringResource(R.string.edit_remove_device)) }
                             TextButton(onClick = {
                                 val key = portal.wireguardPrivateKey
                                 clientConfig = if (key.isNullOrBlank()) {
-                                    "请先生成服务端私钥"
+                                    generateKeyFirstText
                                 } else {
                                     WireGuardKeys.clientConfig(
                                         masterPrivateKeyBase64 = key,
@@ -1273,14 +1279,14 @@ fun NetworkEditScreen(
                                         clientName = client.name,
                                         virtualIpCidr = client.virtualIp,
                                         proxyCidrs = form!!.proxyNetworks.map { formatProxyNetwork(it) },
-                                    ) ?: "无法生成：请检查监听地址、设备名称，且系统需支持 X25519"
+                                    ) ?: generateFailedText
                                 }
-                            }) { Text("生成客户端配置") }
+                            }) { Text(stringResource(R.string.edit_generate_client_config)) }
                         }
                     }
                     item {
                         PillButton(
-                            "添加设备",
+                            stringResource(R.string.edit_add_device),
                             onClick = {
                                 form = form!!.copy(
                                     vpnPortal = portal.copy(
@@ -1301,16 +1307,16 @@ fun NetworkEditScreen(
             // Scalar flags
             item {
                 ExpandableHeader(
-                    title = "传输与限速",
-                    subtitle = "MTU、协议、算法、线程、限速",
-                    expanded = openGroups.contains("传输"),
-                    onToggle = { toggleGroup("传输") },
+                    title = stringResource(R.string.edit_group_transport),
+                    subtitle = stringResource(R.string.edit_group_transport_sub),
+                    expanded = openGroups.contains("transport"),
+                    onToggle = { toggleGroup("transport") },
                 )
             }
-            if (openGroups.contains("传输")) {
+            if (openGroups.contains("transport")) {
                 item {
                     Field(
-                        label = "MTU（400-1380，留空默认 1380）",
+                        label = stringResource(R.string.edit_mtu),
                         value = form!!.mtu,
                         onChange = { form = form!!.copy(mtu = it) },
                         placeholder = "1380",
@@ -1322,7 +1328,7 @@ fun NetworkEditScreen(
                 }
                 item {
                     GlassDropdownRow(
-                        label = "默认传输协议",
+                        label = stringResource(R.string.edit_default_protocol),
                         current = form!!.defaultProtocol,
                         options = DefaultProtocols,
                         optionLabel = { it },
@@ -1331,7 +1337,7 @@ fun NetworkEditScreen(
                 }
                 item {
                     GlassDropdownRow(
-                        label = "压缩算法",
+                        label = stringResource(R.string.edit_compression),
                         current = form!!.compressionAlgo,
                         options = CompressionAlgos,
                         optionLabel = { it },
@@ -1340,7 +1346,7 @@ fun NetworkEditScreen(
                 }
                 item {
                     GlassDropdownRow(
-                        label = "加密算法",
+                        label = stringResource(R.string.edit_encryption),
                         current = form!!.encryptionAlgorithm,
                         options = EncryptionAlgorithms,
                         optionLabel = { it },
@@ -1349,7 +1355,7 @@ fun NetworkEditScreen(
                 }
                 item {
                     Field(
-                        label = "TUN 接口名称（留空自动生成）",
+                        label = stringResource(R.string.edit_dev_name),
                         value = form!!.devName,
                         onChange = { form = form!!.copy(devName = it) },
                         placeholder = "tun0",
@@ -1359,7 +1365,7 @@ fun NetworkEditScreen(
                 }
                 item {
                     Field(
-                        label = "多线程数量",
+                        label = stringResource(R.string.edit_threads),
                         value = form!!.multiThreadCount,
                         onChange = { form = form!!.copy(multiThreadCount = it) },
                         placeholder = "2",
@@ -1371,10 +1377,10 @@ fun NetworkEditScreen(
                 }
                 item {
                     Field(
-                        label = "实例接收限速（字节/秒，留空不限）",
+                        label = stringResource(R.string.edit_recv_limit),
                         value = form!!.instanceRecvBpsLimit,
                         onChange = { form = form!!.copy(instanceRecvBpsLimit = it) },
-                        placeholder = "留空表示不限速",
+                        placeholder = stringResource(R.string.edit_unlimited_placeholder),
                         mono = true,
                         error = recvLimitError,
                         keyboardType = KeyboardType.Number,
@@ -1383,10 +1389,10 @@ fun NetworkEditScreen(
                 }
                 item {
                     Field(
-                        label = "外网中继限速（字节/秒，留空不限）",
+                        label = stringResource(R.string.edit_relay_limit),
                         value = form!!.foreignRelayBpsLimit,
                         onChange = { form = form!!.copy(foreignRelayBpsLimit = it) },
-                        placeholder = "留空表示不限速",
+                        placeholder = stringResource(R.string.edit_unlimited_placeholder),
                         mono = true,
                         error = relayLimitError,
                         keyboardType = KeyboardType.Number,
@@ -1395,7 +1401,7 @@ fun NetworkEditScreen(
                 }
                 item {
                     Field(
-                        label = "SO_MARK（仅 Linux，留空不设置）",
+                        label = stringResource(R.string.edit_socket_mark),
                         value = form!!.socketMark,
                         onChange = { form = form!!.copy(socketMark = it) },
                         placeholder = "0",
@@ -1411,8 +1417,8 @@ fun NetworkEditScreen(
             FlagGroups.forEach { (group, flags) ->
                 item {
                     ExpandableHeader(
-                        title = group,
-                        subtitle = "${flags.size} 个官方开关",
+                        title = stringResource(flagGroupTitleRes(group)),
+                        subtitle = stringResource(R.string.edit_flag_count, flags.size),
                         expanded = openGroups.contains(group),
                         onToggle = { toggleGroup(group) },
                     )
@@ -1421,8 +1427,8 @@ fun NetworkEditScreen(
                     items(flags.size) { index ->
                         val flag = flags[index]
                         GlassSwitchRow(
-                            title = flag.label,
-                            subtitle = flag.hint,
+                            title = stringResource(flag.labelRes),
+                            subtitle = stringResource(flag.hintRes),
                             checked = form!!.flags[flag.key] ?: flag.default,
                             onCheckedChange = { checked ->
                                 form = form!!.copy(flags = form!!.flags + (flag.key to checked))
@@ -1435,18 +1441,18 @@ fun NetworkEditScreen(
             // ACL
             item {
                 ExpandableHeader(
-                    title = "ACL 原文",
-                    subtitle = "按原文保留，导出时原样写入",
-                    expanded = openGroups.contains("ACL"),
-                    onToggle = { toggleGroup("ACL") },
+                    title = stringResource(R.string.edit_acl_title),
+                    subtitle = stringResource(R.string.edit_acl_sub),
+                    expanded = openGroups.contains("acl"),
+                    onToggle = { toggleGroup("acl") },
                 )
             }
-            if (openGroups.contains("ACL")) {
+            if (openGroups.contains("acl")) {
                 item {
                     GlassTextField(
                         value = form!!.aclText,
                         onValueChange = { form = form!!.copy(aclText = it) },
-                        label = "ACL TOML（可留空）",
+                        label = stringResource(R.string.edit_acl_label),
                         placeholder = "[[acl.acl_v1.chains]]\nname = \"protect\"",
                         singleLine = false,
                         minLines = 4,
@@ -1457,20 +1463,20 @@ fun NetworkEditScreen(
             }
         }
 
-        item { SectionLabel("导入 / 导出") }
+        item { SectionLabel(stringResource(R.string.edit_section_import_export)) }
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 PillButton(
-                    "导入 TOML",
+                    stringResource(R.string.edit_import_toml),
                     onClick = { showImport = true },
                     secondary = true,
                     modifier = Modifier.weight(1f),
                 )
                 PillButton(
-                    "导出 TOML",
+                    stringResource(R.string.edit_export_toml),
                     onClick = { showExport = true },
                     secondary = true,
                     modifier = Modifier.weight(1f),
@@ -1480,7 +1486,7 @@ fun NetworkEditScreen(
         if (networkId != "new") {
             item {
                 PillButton(
-                    "分享二维码 / 链接",
+                    stringResource(R.string.edit_share_qr),
                     onClick = { onShare(networkId) },
                     secondary = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -1489,7 +1495,7 @@ fun NetworkEditScreen(
         }
         item {
             PillButton(
-                "恢复默认监听器",
+                stringResource(R.string.edit_restore_listeners),
                 onClick = {
                     texts = texts.copy(listeners = joinLines(DefaultListeners))
                 },
@@ -1501,7 +1507,7 @@ fun NetworkEditScreen(
         if (networkId != "new") {
             item {
                 PillButton(
-                    "删除网络",
+                    stringResource(R.string.edit_delete_network),
                     onClick = { showDelete = true },
                     secondary = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -1515,11 +1521,11 @@ fun NetworkEditScreen(
         val parseError = importError ?: if (importText.isBlank()) {
             null
         } else {
-            runCatching { TomlCodec.importToml(importText) }.exceptionOrNull()?.message
+            tomlErrorMessage(context, runCatching { TomlCodec.importToml(importText) }.exceptionOrNull())
         }
         AlertDialog(
             onDismissRequest = { showImport = false },
-            title = { Text("导入 TOML") },
+            title = { Text(stringResource(R.string.edit_import_toml)) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     GlassTextField(
@@ -1534,7 +1540,7 @@ fun NetworkEditScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     PillButton(
-                        "选择文件",
+                        stringResource(R.string.edit_choose_file),
                         onClick = {
                             openTomlFile.launch(
                                 arrayOf(
@@ -1557,7 +1563,7 @@ fun NetworkEditScreen(
                         )
                     } else {
                         Text(
-                            text = "最多 1 MB，按 UTF-8 读取。选择文件后先预览，确认后再导入。",
+                            text = stringResource(R.string.edit_import_hint),
                             color = g.muted,
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(top = 6.dp),
@@ -1571,14 +1577,14 @@ fun NetworkEditScreen(
                     onClick = {
                         val parsed = runCatching { TomlCodec.importToml(importText) }
                             .getOrElse {
-                                importError = it.message
+                                importError = tomlErrorMessage(context, it)
                                 null
                             }
                         if (parsed != null) beginImport(parsed)
                     },
-                ) { Text("导入") }
+                ) { Text(stringResource(R.string.action_import)) }
             },
-            dismissButton = { TextButton(onClick = { showImport = false }) { Text("取消") } },
+            dismissButton = { TextButton(onClick = { showImport = false }) { Text(stringResource(R.string.action_cancel)) } },
             containerColor = MaterialTheme.colorScheme.surface,
         )
     }
@@ -1589,19 +1595,19 @@ fun NetworkEditScreen(
             (mode == EditMode.Toml && tomlText.contains("network_secret"))
         AlertDialog(
             onDismissRequest = { showExport = false },
-            title = { Text("导出 TOML") },
+            title = { Text(stringResource(R.string.edit_export_toml)) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     if (hasSecret) {
                         Text(
-                            text = "文件包含网络密钥，请妥善保管。复制到剪贴板时会遮罩密钥。",
+                            text = stringResource(R.string.edit_export_warning),
                             color = g.warn,
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }
                     GlassSwitchRow(
-                        title = "导出时不含密钥",
-                        subtitle = "开启后清空 network_secret",
+                        title = stringResource(R.string.edit_export_no_secret),
+                        subtitle = stringResource(R.string.edit_export_no_secret_sub),
                         checked = exportWithoutSecret,
                         onCheckedChange = { exportWithoutSecret = it },
                     )
@@ -1619,7 +1625,7 @@ fun NetworkEditScreen(
                         pendingExportText = buildExportText(exportWithoutSecret)
                         pendingExportName = exportFileName(currentUi().name)
                         saveTomlFile.launch(pendingExportName)
-                    }) { Text("保存为文件") }
+                    }) { Text(stringResource(R.string.edit_save_as_file)) }
                     TextButton(onClick = {
                         // Clipboard defaults to the masked form even when the file keeps secrets.
                         copyToClipboard(
@@ -1627,10 +1633,10 @@ fun NetworkEditScreen(
                             "TOML",
                             maskTomlSecrets(buildExportText(exportWithoutSecret)),
                         )
-                    }) { Text("复制") }
+                    }) { Text(stringResource(R.string.action_copy)) }
                 }
             },
-            dismissButton = { TextButton(onClick = { showExport = false }) { Text("关闭") } },
+            dismissButton = { TextButton(onClick = { showExport = false }) { Text(stringResource(R.string.action_close)) } },
             containerColor = MaterialTheme.colorScheme.surface,
         )
     }
@@ -1638,11 +1644,10 @@ fun NetworkEditScreen(
     conflictImport?.let { parsed ->
         AlertDialog(
             onDismissRequest = { conflictImport = null },
-            title = { Text("已有同 ID 网络") },
+            title = { Text(stringResource(R.string.edit_conflict_title)) },
             text = {
                 Text(
-                    "本机已有 instance_id 为「${parsed.instanceId}」的网络。覆盖会替换该网络；" +
-                        "另存为新网络会生成新的 instance_id，避免与对方实例冲突。",
+                    stringResource(R.string.edit_conflict_text, parsed.instanceId.orEmpty()),
                 )
             },
             confirmButton = {
@@ -1650,16 +1655,16 @@ fun NetworkEditScreen(
                     applyImported(parsed, saveAsNew = true)
                     conflictImport = null
                     importText = ""
-                    Toast.makeText(context, "已另存为新网络，检查后点保存", Toast.LENGTH_SHORT).show()
-                }) { Text("另存为新网络") }
+                    Toast.makeText(context, context.getString(R.string.edit_saved_as_new), Toast.LENGTH_SHORT).show()
+                }) { Text(stringResource(R.string.networks_save_as_new)) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     applyImported(parsed, saveAsNew = false)
                     conflictImport = null
                     importText = ""
-                    Toast.makeText(context, "将覆盖同 ID 网络", Toast.LENGTH_SHORT).show()
-                }) { Text("覆盖") }
+                    Toast.makeText(context, context.getString(R.string.edit_will_overwrite), Toast.LENGTH_SHORT).show()
+                }) { Text(stringResource(R.string.action_overwrite)) }
             },
             containerColor = MaterialTheme.colorScheme.surface,
         )
@@ -1668,7 +1673,7 @@ fun NetworkEditScreen(
     if (clientConfig != null) {
         AlertDialog(
             onDismissRequest = { clientConfig = null },
-            title = { Text("客户端 WireGuard 配置") },
+            title = { Text(stringResource(R.string.edit_client_config_title)) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     Text(
@@ -1679,18 +1684,18 @@ fun NetworkEditScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { copyToClipboard(context, "WireGuard", clientConfig!!) }) { Text("复制") }
+                TextButton(onClick = { copyToClipboard(context, "WireGuard", clientConfig!!) }) { Text(stringResource(R.string.action_copy)) }
             },
-            dismissButton = { TextButton(onClick = { clientConfig = null }) { Text("关闭") } },
+            dismissButton = { TextButton(onClick = { clientConfig = null }) { Text(stringResource(R.string.action_close)) } },
             containerColor = MaterialTheme.colorScheme.surface,
         )
     }
 
     if (showDiscard) {
         ConfirmDialog(
-            title = "放弃修改",
-            text = "有未保存的修改，确定返回？",
-            confirmText = "放弃",
+            title = stringResource(R.string.edit_discard_title),
+            text = stringResource(R.string.edit_discard_text),
+            confirmText = stringResource(R.string.edit_discard),
             onConfirm = {
                 showDiscard = false
                 onBack()
@@ -1701,9 +1706,9 @@ fun NetworkEditScreen(
 
     if (showDelete) {
         ConfirmDialog(
-            title = "删除网络",
-            text = "确定删除「${current.name}」？",
-            confirmText = "删除",
+            title = stringResource(R.string.edit_delete_network),
+            text = stringResource(R.string.edit_delete_text, current.name),
+            confirmText = stringResource(R.string.action_delete),
             onConfirm = {
                 vm.deleteNetwork(networkId)
                 showDelete = false
@@ -1714,46 +1719,46 @@ fun NetworkEditScreen(
     }
 }
 
-private fun validationErrors(network: UiNetwork): List<String> {
-    val errors = mutableListOf<String>()
-    if (network.name.isBlank()) errors.add("网络名称不能为空")
-    if (!network.dhcp && network.ipv4.isNotBlank() && !isValidCidr(network.ipv4)) errors.add("静态 IPv4 格式错误")
-    if (network.ipv6.isNotBlank() && !isValidCidr(network.ipv6)) errors.add("静态 IPv6 格式错误")
+private fun validationErrors(network: UiNetwork): List<Int> {
+    val errors = mutableListOf<Int>()
+    if (network.name.isBlank()) errors.add(R.string.edit_validation_name_required)
+    if (!network.dhcp && network.ipv4.isNotBlank() && !isValidCidr(network.ipv4)) errors.add(R.string.edit_validation_static_ipv4)
+    if (network.ipv6.isNotBlank() && !isValidCidr(network.ipv6)) errors.add(R.string.edit_validation_static_ipv6)
     if (network.mtu.isNotBlank()) {
         val mtu = network.mtu.toIntOrNull()
-        if (mtu == null || mtu !in 400..1380) errors.add("MTU 超出范围")
+        if (mtu == null || mtu !in 400..1380) errors.add(R.string.edit_validation_mtu)
     }
     if (network.instanceRecvBpsLimit.isNotBlank() && network.instanceRecvBpsLimit.toLongOrNull() == null) {
-        errors.add("实例限速不是整数")
+        errors.add(R.string.edit_validation_recv_limit)
     }
     if (network.foreignRelayBpsLimit.isNotBlank() && network.foreignRelayBpsLimit.toLongOrNull() == null) {
-        errors.add("中继限速不是整数")
+        errors.add(R.string.edit_validation_relay_limit)
     }
-    if (network.multiThreadCount.toIntOrNull()?.let { it < 1 } != false) errors.add("多线程数量无效")
-    if (network.socketMark.isNotBlank() && network.socketMark.toIntOrNull() == null) errors.add("SO_MARK 不是整数")
-    if (network.socks5.isNotBlank() && !SocksPattern.matches(network.socks5)) errors.add("Socks5 地址格式错误")
-    if (network.servers.any { it.isNotBlank() && !UrlPattern.matches(it) }) errors.add("服务器地址格式错误")
-    if (network.listeners.any { it.isNotBlank() && !ListenerPattern.matches(it) }) errors.add("监听器格式错误")
-    if (network.mappedListeners.any { it.isNotBlank() && !ListenerPattern.matches(it) }) errors.add("监听映射格式错误")
-    if (network.proxyNetworks.any { parseProxyNetwork(formatProxyNetwork(it)) == null }) errors.add("子网代理 CIDR 错误")
-    network.portForwards.forEach { if (it.toDraft().error() != null) errors.add("端口转发不完整") }
+    if (network.multiThreadCount.toIntOrNull()?.let { it < 1 } != false) errors.add(R.string.edit_validation_threads)
+    if (network.socketMark.isNotBlank() && network.socketMark.toIntOrNull() == null) errors.add(R.string.edit_validation_socket_mark)
+    if (network.socks5.isNotBlank() && !SocksPattern.matches(network.socks5)) errors.add(R.string.edit_validation_socks5)
+    if (network.servers.any { it.isNotBlank() && !UrlPattern.matches(it) }) errors.add(R.string.edit_validation_servers)
+    if (network.listeners.any { it.isNotBlank() && !ListenerPattern.matches(it) }) errors.add(R.string.edit_validation_listeners)
+    if (network.mappedListeners.any { it.isNotBlank() && !ListenerPattern.matches(it) }) errors.add(R.string.edit_validation_mapped)
+    if (network.proxyNetworks.any { parseProxyNetwork(formatProxyNetwork(it)) == null }) errors.add(R.string.edit_validation_proxy_cidr)
+    network.portForwards.forEach { if (it.toDraft().error() != null) errors.add(R.string.edit_validation_portforward) }
     if (network.relayNetworkWhitelistEnabled && network.relayNetworkWhitelist.any { it.isBlank() }) {
-        errors.add("白名单含空项")
+        errors.add(R.string.edit_validation_whitelist)
     }
     val portal = network.vpnPortal
     if (portal != null) {
-        if (!isValidHostPort(portal.wireguardListen)) errors.add("VPN portal 监听地址错误")
+        if (!isValidHostPort(portal.wireguardListen)) errors.add(R.string.edit_validation_portal_listen)
         val portalKey = portal.wireguardPrivateKey
         if (portalKey != null && portalKey.isNotBlank() && base64Size(portalKey) != 32) {
-            errors.add("VPN portal 私钥应为 32 字节 Base64")
+            errors.add(R.string.edit_validation_portal_key)
         }
-        if (portal.clients.size > 64) errors.add("VPN 客户端最多 64 个")
-        if (portal.clients.any { !ClientNamePattern.matches(it.name) }) errors.add("VPN 客户端名称无效")
-        if (portal.clients.map { it.name }.toSet().size != portal.clients.size) errors.add("VPN 客户端名称重复")
-        if (portal.clients.any { !isValidCidr(it.virtualIp) }) errors.add("VPN 客户端虚拟 IP 无效")
+        if (portal.clients.size > 64) errors.add(R.string.edit_validation_clients_max)
+        if (portal.clients.any { !ClientNamePattern.matches(it.name) }) errors.add(R.string.edit_validation_client_name)
+        if (portal.clients.map { it.name }.toSet().size != portal.clients.size) errors.add(R.string.edit_validation_client_duplicate)
+        if (portal.clients.any { !isValidCidr(it.virtualIp) }) errors.add(R.string.edit_validation_client_ip)
     }
     network.secureMode?.localPrivateKey?.takeIf { it.isNotBlank() }?.let {
-        if (base64Size(it) != 32) errors.add("安全模式私钥应为 32 字节 Base64")
+        if (base64Size(it) != 32) errors.add(R.string.edit_validation_secure_key)
     }
     return errors
 }
@@ -1766,11 +1771,17 @@ private fun base64Size(text: String): Int = runCatching {
 private fun InlineError(text: String?) {
     if (text == null) return
     Text(
-        text = "错误：$text",
+        text = stringResource(R.string.edit_error_prefix, text),
         color = MaterialTheme.colorScheme.error,
         style = MaterialTheme.typography.labelSmall,
         modifier = Modifier.padding(horizontal = 14.dp, vertical = 1.dp),
     )
+}
+
+@Composable
+private fun InlineErrorRes(@androidx.annotation.StringRes textRes: Int?) {
+    if (textRes == null) return
+    InlineError(stringResource(textRes))
 }
 
 /**
@@ -1791,7 +1802,7 @@ private fun SecretField(
             .glass(RoundedCornerShape(18.dp), GlassLevel.Subtle)
             .padding(horizontal = 14.dp, vertical = 9.dp),
     ) {
-        Text("网络密钥", style = MaterialTheme.typography.labelSmall, color = g.muted)
+        Text(stringResource(R.string.edit_secret), style = MaterialTheme.typography.labelSmall, color = g.muted)
         BasicTextField(
             value = value,
             onValueChange = onChange,
@@ -1812,7 +1823,7 @@ private fun SecretField(
                 Box {
                     if (value.isEmpty()) {
                         Text(
-                            "留空表示无密钥",
+                            stringResource(R.string.edit_secret_placeholder),
                             style = MaterialTheme.typography.bodyMedium,
                             color = g.muted.copy(alpha = 0.7f),
                         )

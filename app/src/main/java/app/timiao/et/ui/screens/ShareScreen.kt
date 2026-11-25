@@ -29,11 +29,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.timiao.et.R
 import app.timiao.et.share.QrCode
 import app.timiao.et.share.ShareCodec
 import app.timiao.et.ui.AppViewModel
@@ -77,11 +79,11 @@ fun ShareScreen(
         val value = link ?: return
         val manager = context.getSystemService(ClipboardManager::class.java)
         if (manager == null) {
-            Toast.makeText(context, "剪贴板不可用", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.label_clipboard_unavailable), Toast.LENGTH_SHORT).show()
             return
         }
-        manager.setPrimaryClip(ClipData.newPlainText("缇喵配置链接", value))
-        Toast.makeText(context, "分享链接已复制", Toast.LENGTH_SHORT).show()
+        manager.setPrimaryClip(ClipData.newPlainText(context.getString(R.string.share_clipboard_link), value))
+        Toast.makeText(context, context.getString(R.string.share_copied), Toast.LENGTH_SHORT).show()
     }
 
     fun systemShare() {
@@ -90,8 +92,8 @@ fun ShareScreen(
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, value)
         }
-        runCatching { context.startActivity(Intent.createChooser(send, "分享网络配置")) }
-            .onFailure { Toast.makeText(context, "没有可分享的应用", Toast.LENGTH_SHORT).show() }
+        runCatching { context.startActivity(Intent.createChooser(send, context.getString(R.string.share_chooser))) }
+            .onFailure { Toast.makeText(context, context.getString(R.string.share_no_app), Toast.LENGTH_SHORT).show() }
     }
 
     LazyColumn(
@@ -101,14 +103,14 @@ fun ShareScreen(
     ) {
         item {
             ScreenHeader(
-                title = "分享网络",
-                subtitle = network?.name ?: "网络不存在",
+                title = stringResource(R.string.share_title),
+                subtitle = network?.name ?: stringResource(R.string.share_not_found),
                 onBack = onBack,
             )
         }
 
         if (network == null) {
-            item { EmptyGlassCard("这个网络已被删除。") }
+            item { EmptyGlassCard(stringResource(R.string.share_deleted)) }
             return@LazyColumn
         }
 
@@ -119,17 +121,17 @@ fun ShareScreen(
                     .glass(RoundedCornerShape(22.dp), GlassLevel.Regular)
                     .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                InfoRow("网络名称", network.name)
-                InfoRow("节点数", network.servers.size.toString())
-                InfoRow("密钥", if (includeSecret) "包含" else "已移除")
-                InfoRow("链接长度", "${link?.length ?: 0} 字符")
+                InfoRow(stringResource(R.string.share_net_name), network.name)
+                InfoRow(stringResource(R.string.share_node_count), network.servers.size.toString())
+                InfoRow(stringResource(R.string.share_secret), stringResource(if (includeSecret) R.string.share_secret_included else R.string.share_secret_removed))
+                InfoRow(stringResource(R.string.share_link_length), stringResource(R.string.share_chars, link?.length ?: 0))
             }
         }
 
         item {
             GlassSwitchRow(
-                title = "包含密钥",
-                subtitle = "默认关闭。关闭时会从分享内容中删除 network_secret 等密钥字段。",
+                title = stringResource(R.string.share_include_secret),
+                subtitle = stringResource(R.string.share_include_secret_sub),
                 checked = includeSecret,
                 onCheckedChange = { includeSecret = it },
             )
@@ -145,13 +147,13 @@ fun ShareScreen(
                         .padding(14.dp),
                 ) {
                     Text(
-                        text = "警告：链接包含密钥",
+                        text = stringResource(R.string.share_warning_title),
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.ExtraBold),
                         color = error,
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "任何拿到链接或二维码的人都能加入这个网络。只发给可信的人，不要发到公开群组。",
+                        text = stringResource(R.string.share_warning_text),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -159,7 +161,7 @@ fun ShareScreen(
             }
         }
 
-        item { SectionLabel("二维码") }
+        item { SectionLabel(stringResource(R.string.share_qr_section)) }
         item {
             Column(
                 modifier = Modifier
@@ -178,13 +180,13 @@ fun ShareScreen(
                     }
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = "让另一台设备打开「扫码导入」并对准二维码",
+                        text = stringResource(R.string.share_qr_hint),
                         style = MaterialTheme.typography.labelSmall,
                         color = g.muted,
                     )
                 } else {
                     Text(
-                        text = "配置过大，二维码放不下。请改用复制链接或系统分享。",
+                        text = stringResource(R.string.share_qr_too_large),
                         style = MaterialTheme.typography.bodyMedium,
                         color = g.muted,
                     )
@@ -192,7 +194,7 @@ fun ShareScreen(
             }
         }
 
-        item { SectionLabel("分享链接") }
+        item { SectionLabel(stringResource(R.string.share_link_section)) }
         item {
             Column(
                 modifier = Modifier
@@ -202,7 +204,7 @@ fun ShareScreen(
             ) {
                 SelectionContainer {
                     Text(
-                        text = link ?: "无法生成链接",
+                        text = link ?: stringResource(R.string.share_no_link),
                         style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 4,
@@ -214,13 +216,13 @@ fun ShareScreen(
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PillButton(
-                    text = "复制链接",
+                    text = stringResource(R.string.share_copy_link),
                     onClick = ::copyLink,
                     enabled = link != null,
                     modifier = Modifier.weight(1f),
                 )
                 PillButton(
-                    text = "系统分享",
+                    text = stringResource(R.string.share_system_share),
                     onClick = ::systemShare,
                     enabled = link != null,
                     modifier = Modifier.weight(1f),
@@ -230,7 +232,7 @@ fun ShareScreen(
         }
         item {
             Text(
-                text = "接收方用缇喵的「扫码导入」，或直接打开链接即可导入。缺少密钥时，导入后需要补填。",
+                text = stringResource(R.string.share_footer),
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 4.dp),

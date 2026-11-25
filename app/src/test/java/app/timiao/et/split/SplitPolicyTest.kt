@@ -1,5 +1,6 @@
 package app.timiao.et.split
 
+import app.timiao.et.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -82,11 +83,10 @@ class SplitPolicyTest {
     }
 
     @Test
-    fun summaryReflectsModeAndSelection() {
-        assertTrue(SplitPolicy(SplitMode.All).summary().contains("全部"))
-        assertEquals("尚未选择应用", SplitPolicy(SplitMode.Allow).summary())
-        assertEquals("仅 1 个应用走 EasyTier", SplitPolicy(SplitMode.Allow, setOf("a")).summary())
-        assertEquals("1 个应用不走 EasyTier", SplitPolicy(SplitMode.Deny, setOf("a")).summary())
+    fun modeLabelsAreResourceBacked() {
+        assertEquals(R.string.split_mode_all, SplitMode.All.labelRes)
+        assertEquals(R.string.split_mode_allow, SplitMode.Allow.labelRes)
+        assertEquals(R.string.split_mode_deny, SplitMode.Deny.labelRes)
     }
 
     private companion object {

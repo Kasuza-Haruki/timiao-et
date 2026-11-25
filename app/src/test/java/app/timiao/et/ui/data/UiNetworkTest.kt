@@ -1,5 +1,6 @@
 package app.timiao.et.ui.data
 
+import app.timiao.et.R
 import app.timiao.et.core.TomlCodec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -116,10 +117,10 @@ class UiNetworkTest {
         assertEquals("10.126.126.1:23456", config.dstAddr)
         assertEquals(draft, config.toDraft())
 
-        assertEquals("端口应为 1-65535", draft.copy(bindPort = "70000").error())
-        assertEquals("端口应为 1-65535", draft.copy(dstPort = "x").error())
-        assertEquals("地址不能为空", draft.copy(dstIp = "").error())
-        assertEquals("协议只能是 tcp 或 udp", draft.copy(proto = "sctp").error())
+        assertEquals(R.string.edit_err_port_range, draft.copy(bindPort = "70000").error())
+        assertEquals(R.string.edit_err_port_range, draft.copy(dstPort = "x").error())
+        assertEquals(R.string.edit_err_addr_required, draft.copy(dstIp = "").error())
+        assertEquals(R.string.edit_err_protocol_tcp_udp, draft.copy(proto = "sctp").error())
     }
 
     @Test

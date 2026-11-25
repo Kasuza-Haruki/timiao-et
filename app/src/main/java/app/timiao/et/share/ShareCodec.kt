@@ -1,5 +1,9 @@
 package app.timiao.et.share
 
+import android.content.Context
+import androidx.annotation.StringRes
+import app.timiao.et.R
+
 import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.net.URLDecoder
@@ -41,8 +45,12 @@ object ShareCodec {
 
     sealed interface DecodeResult {
         data class Success(val toml: String, val hasSecret: Boolean) : DecodeResult
-        data class Invalid(val reason: String) : DecodeResult
+        data class Invalid(@StringRes val reasonRes: Int, val args: List<String> = emptyList()) : DecodeResult
     }
+
+    /** Localized text of an invalid result. */
+    fun message(context: Context, result: DecodeResult.Invalid): String =
+        context.getString(result.reasonRes, *result.args.toTypedArray())
 
     fun encode(toml: String): String {
         val compressed = deflate(toml.toByteArray(StandardCharsets.UTF_8))
@@ -56,40 +64,40 @@ object ShareCodec {
 
     fun decode(link: String): DecodeResult {
         val text = link.trim()
-        if (text.isEmpty()) return DecodeResult.Invalid("链接为空")
-        if (text.length > MAX_LINK_CHARS) return DecodeResult.Invalid("链接过长")
+        if (text.isEmpty()) return DecodeResult.Invalid(R.string.share_err_empty)
+        if (text.length > MAX_LINK_CHARS) return DecodeResult.Invalid(R.string.share_err_too_long)
 
         val uri = try {
             URI(text)
         } catch (_: Exception) {
-            return DecodeResult.Invalid("链接格式错误")
+            return DecodeResult.Invalid(R.string.share_err_bad_format)
         }
         if (!SCHEME.equals(uri.scheme, ignoreCase = true) ||
             !HOST.equals(uri.host, ignoreCase = true)
         ) {
-            return DecodeResult.Invalid("不是缇喵分享链接")
+            return DecodeResult.Invalid(R.string.share_err_wrong_scheme)
         }
 
         val params = parseQuery(uri.rawQuery)
-        if (params["v"] != VERSION) return DecodeResult.Invalid("不支持的链接版本")
-        val data = params["d"] ?: return DecodeResult.Invalid("链接缺少配置数据")
-        if (data.length > MAX_LINK_CHARS) return DecodeResult.Invalid("链接过长")
+        if (params["v"] != VERSION) return DecodeResult.Invalid(R.string.share_err_bad_version)
+        val data = params["d"] ?: return DecodeResult.Invalid(R.string.share_err_missing_data)
+        if (data.length > MAX_LINK_CHARS) return DecodeResult.Invalid(R.string.share_err_too_long)
 
         val compressed = try {
             Base64.getUrlDecoder().decode(data)
         } catch (_: IllegalArgumentException) {
-            return DecodeResult.Invalid("配置数据不是有效的 Base64")
+            return DecodeResult.Invalid(R.string.share_err_bad_base64)
         }
-        if (compressed.size > MAX_COMPRESSED_BYTES) return DecodeResult.Invalid("配置数据过大")
+        if (compressed.size > MAX_COMPRESSED_BYTES) return DecodeResult.Invalid(R.string.share_err_too_big)
 
         val toml = try {
             inflateBounded(compressed)
         } catch (e: DataFormatException) {
-            return DecodeResult.Invalid("配置数据已损坏")
+            return DecodeResult.Invalid(R.string.share_err_corrupt)
         } catch (e: IllegalStateException) {
-            return DecodeResult.Invalid(e.message ?: "配置数据无效")
+            return DecodeResult.Invalid(R.string.share_err_invalid)
         }
-        if (toml.isBlank()) return DecodeResult.Invalid("配置内容为空")
+        if (toml.isBlank()) return DecodeResult.Invalid(R.string.share_err_empty_config)
         return DecodeResult.Success(toml, hasSecret(toml))
     }
 
@@ -97,9 +105,9 @@ object ShareCodec {
     fun parseImportText(raw: String): DecodeResult {
         val text = raw.trim()
         if (text.startsWith("$SCHEME://", ignoreCase = true)) return decode(text)
-        if (text.length > MAX_INFLATED_BYTES) return DecodeResult.Invalid("配置内容过大")
+        if (text.length > MAX_INFLATED_BYTES) return DecodeResult.Invalid(R.string.share_err_inflated_too_big)
         if (looksLikeToml(text)) return DecodeResult.Success(text, hasSecret(text))
-        return DecodeResult.Invalid("既不是分享链接，也不是 TOML 配置")
+        return DecodeResult.Invalid(R.string.share_err_not_recognized)
     }
 
     fun looksLikeToml(text: String): Boolean {
@@ -153,13 +161,13 @@ object ShareCodec {
                     throw e
                 }
                 if (n == 0) {
-                    if (inflater.needsInput()) throw IllegalStateException("配置数据不完整")
-                    if (inflater.needsDictionary()) throw IllegalStateException("配置数据无效")
-                    throw IllegalStateException("配置数据无法解压")
+                    if (inflater.needsInput()) throw IllegalStateException("incomplete")
+                    if (inflater.needsDictionary()) throw IllegalStateException("invalid")
+                    throw IllegalStateException("inflate")
                 }
                 out.write(buffer, 0, n)
                 if (out.size() > MAX_INFLATED_BYTES) {
-                    throw IllegalStateException("配置解压后过大")
+                    throw IllegalStateException("too-large")
                 }
             }
         } finally {
