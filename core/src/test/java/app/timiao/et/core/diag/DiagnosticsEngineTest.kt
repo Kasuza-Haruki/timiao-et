@@ -181,6 +181,22 @@ class DiagnosticsEngineTest {
     }
 
     @Test
+    fun `no underlying network is a direct failure`() {
+        val result = report(device = FakeDevice(network = false))
+        val item = result.item("device_network")
+        assertEquals(DiagSeverity.Fail, item.severity)
+        assertTrue(item.summary.contains("设备当前没有可用网络"))
+        assertTrue(item.advice!!.contains("Wi-Fi"))
+        assertEquals(DiagSeverity.Fail, result.overall)
+    }
+
+    @Test
+    fun `available network passes`() {
+        val item = report().item("device_network")
+        assertEquals(DiagSeverity.Pass, item.severity)
+    }
+
+    @Test
     fun `connect error event is translated and gets port advice`() {
         val raw = rawInfos(
             listOf(
@@ -281,10 +297,12 @@ class DiagnosticsEngineTest {
         private val vpn: Boolean = true,
         private val battery: Boolean = true,
         private val notifications: Boolean = true,
+        private val network: Boolean = true,
     ) : DeviceProbe {
         override fun hasVpnPermission(): Boolean = vpn
         override fun isIgnoringBatteryOptimizations(): Boolean = battery
         override fun hasNotificationPermission(): Boolean = notifications
+        override fun hasUnderlyingNetwork(): Boolean = network
     }
 
     private fun rawInfos(events: List<String>, nat: String? = "PortRestricted"): String {
