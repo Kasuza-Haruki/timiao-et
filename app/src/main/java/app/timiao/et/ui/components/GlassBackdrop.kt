@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
@@ -23,6 +24,7 @@ import kotlin.random.Random
  * Modifier.blur); older versions fall back to the same soft radial gradients
  * with no live blur. Dark mode is a deep-purple night sky with brighter blobs.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun GlassBackdrop(modifier: Modifier = Modifier) {
     val g = LocalGlassColors.current

@@ -23,7 +23,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -220,28 +219,29 @@ fun NetworkEditScreen(
         }
 
         item { SectionLabel("选项") }
-        OfficialFlagGroups.forEach { (groupName, flags) ->
-            key(groupName) {
-                var expanded by remember { mutableStateOf(groupName == "连接") }
-                item {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OfficialFlagGroups.forEach { (groupName, flags) ->
+                    var expanded by rememberSaveable(groupName) {
+                        mutableStateOf(groupName == "连接")
+                    }
                     ExpandableHeader(
                         title = groupName,
                         subtitle = "${flags.size} 个官方选项",
                         expanded = expanded,
                         onToggle = { expanded = !expanded },
                     )
-                }
-                if (expanded) {
-                    items(flags.size) { flagIndex ->
-                        val flag = flags[flagIndex]
-                        GlassSwitchRow(
-                            title = flag.label,
-                            subtitle = flag.hint,
-                            checked = current.flags[flag.key] ?: false,
-                            onCheckedChange = { checked ->
-                                draft = draft!!.copy(flags = draft!!.flags + (flag.key to checked))
-                            },
-                        )
+                    if (expanded) {
+                        flags.forEach { flag ->
+                            GlassSwitchRow(
+                                title = flag.label,
+                                subtitle = flag.hint,
+                                checked = current.flags[flag.key] ?: false,
+                                onCheckedChange = { checked ->
+                                    draft = draft!!.copy(flags = draft!!.flags + (flag.key to checked))
+                                },
+                            )
+                        }
                     }
                 }
             }

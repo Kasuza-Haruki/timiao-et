@@ -46,14 +46,15 @@ class AppViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val activeStatus: StateFlow<NetworkStatus> = combine(activeNetwork, statuses) { net, map ->
-        map[net?.id] ?: IdleStatus
+        net?.let { map[it.id] } ?: IdleStatus
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), IdleStatus)
 
     init {
         viewModelScope.launch {
             repository.networks.collect { raw ->
                 val ids = raw.map { it.id }
-                if (_activeNetworkId.value !in ids) {
+                val active = _activeNetworkId.value
+                if (active == null || active !in ids) {
                     selectNetwork(ids.firstOrNull())
                 }
             }

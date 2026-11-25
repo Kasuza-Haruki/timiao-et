@@ -1,6 +1,8 @@
 package app.timiao.et.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -231,10 +233,12 @@ fun AvatarBadge(name: String, size: Int = 38) {
 fun LatencyPill(peer: PeerInfo, modifier: Modifier = Modifier) {
     val g = LocalGlassColors.current
     val latency = peer.latencyMs
-    val color = when {
-        latency == null -> g.muted
-        latency < 50 -> g.good
-        else -> g.warn
+    val color = if (latency == null) {
+        g.muted
+    } else if (latency < 50) {
+        g.good
+    } else {
+        g.warn
     }
     Column(modifier, horizontalAlignment = Alignment.End) {
         Box(
@@ -289,9 +293,9 @@ fun PeerRow(
                 overflow = TextOverflow.Ellipsis,
             )
             val detail = if (peer.isRelay()) {
-                "${peer.ipv4 ?: "—"} · 经中继 · ${tunnelLabel()}"
+                "${peer.ipv4 ?: "—"} · 经中继 · ${peer.tunnelLabel()}"
             } else {
-                "${peer.ipv4 ?: "—"} · ${tunnelLabel()} · ${natLabel(peer.natType)}"
+                "${peer.ipv4 ?: "—"} · ${peer.tunnelLabel()} · ${natLabel(peer.natType)}"
             }
             Text(
                 text = detail,
@@ -416,6 +420,7 @@ fun SegmentedGlass(
     modifier: Modifier = Modifier,
 ) {
     val g = LocalGlassColors.current
+    val reduced = LocalReducedMotion.current
     val shape = RoundedCornerShape(999.dp)
     Row(
         modifier = modifier
@@ -428,6 +433,7 @@ fun SegmentedGlass(
             val active = index == selected
             val bg by animateColorAsState(
                 targetValue = if (active) g.dockSelected else Color.Transparent,
+                animationSpec = if (reduced) snap() else tween(180),
                 label = "segment-bg",
             )
             Box(

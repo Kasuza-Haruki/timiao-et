@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -250,6 +251,7 @@ private fun PeerDetail(peer: PeerInfo, onCopy: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalTextApi::class)
 @Composable
 private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myName: String) {
     val g = LocalGlassColors.current
@@ -276,7 +278,7 @@ private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myName: String)
                 .aspectRatio(1.05f),
         ) {
             val center = Offset(size.width / 2f, size.height / 2f)
-            val orbit = min(size.width, size.height) / 2f - 48.dp.toPx()
+            val orbit = min(size.width, size.height) / 2f - 56.dp.toPx()
             val nodeR = 20.dp.toPx()
             val centerR = 28.dp.toPx()
 

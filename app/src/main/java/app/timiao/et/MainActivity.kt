@@ -1,6 +1,8 @@
 package app.timiao.et
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -57,12 +59,18 @@ private fun SystemBarAppearance(dark: Boolean) {
     val view = LocalView.current
     if (view.isInEditMode) return
     SideEffect {
-        val window = (view.context as? Activity)?.window ?: return@SideEffect
+        val window = view.context.findActivity()?.window ?: return@SideEffect
         WindowCompat.getInsetsController(window, view).apply {
             isAppearanceLightStatusBars = !dark
             isAppearanceLightNavigationBars = !dark
         }
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 /** Reads the system animator scale; zero means "reduce motion" is on. */

@@ -1,6 +1,8 @@
 package app.timiao.et.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.timiao.et.ui.theme.LocalGlassColors
+import app.timiao.et.ui.theme.LocalReducedMotion
 
 data class DockItem(val route: String, val label: String)
 
@@ -37,6 +40,7 @@ fun GlassDock(
     modifier: Modifier = Modifier,
 ) {
     val g = LocalGlassColors.current
+    val reduced = LocalReducedMotion.current
     val pill = RoundedCornerShape(999.dp)
     Row(
         modifier = modifier
@@ -51,6 +55,7 @@ fun GlassDock(
                 (item.route == "networks" && currentRoute?.startsWith("network/") == true)
             val bg by animateColorAsState(
                 targetValue = if (active) g.dockSelected else androidx.compose.ui.graphics.Color.Transparent,
+                animationSpec = if (reduced) snap() else tween(180),
                 label = "dock-bg",
             )
             Box(

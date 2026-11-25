@@ -47,7 +47,7 @@ fun natLabel(nat: String?): String = when (nat?.lowercase(Locale.US)) {
     "cone" -> "锥形 NAT"
     "symmetric" -> "对称 NAT"
     null, "" -> "—"
-    else -> nat
+    else -> nat ?: "—"
 }
 
 fun initialOf(name: String): String {

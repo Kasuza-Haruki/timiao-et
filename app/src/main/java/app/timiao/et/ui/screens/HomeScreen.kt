@@ -1,5 +1,6 @@
 package app.timiao.et.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -179,7 +180,7 @@ fun HomeScreen(
 
         item {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, top = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 SectionLabel("附近节点", Modifier.weight(1f))
@@ -187,7 +188,9 @@ fun HomeScreen(
                     text = "全部 ›",
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(end = 4.dp),
+                    modifier = Modifier
+                        .clickable { onNavigate("peers") }
+                        .padding(horizontal = 4.dp, vertical = 6.dp),
                 )
             }
         }
