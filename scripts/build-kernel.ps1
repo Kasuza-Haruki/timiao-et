@@ -137,7 +137,6 @@ if (-not $Readelf) {
 }
 
 $PinnedFlags = "-C link-arg=-Wl,-z,max-page-size=16384"
-$env:RUSTFLAGS = if ($env:RUSTFLAGS) { "$env:RUSTFLAGS $PinnedFlags" } else { $PinnedFlags }
 $env:CARGO_TARGET_DIR = $TargetDir
 New-Item -ItemType Directory -Force $TargetDir | Out-Null
 New-Item -ItemType Directory -Force $OutRoot | Out-Null
@@ -151,9 +150,17 @@ $Results = @()
 # 4. Build each ABI --------------------------------------------------------
 foreach ($abi in $AbiList) {
     $triple = $TripleMap[$abi]
+    # Target-specific rustflags avoid passing Android link flags to host build scripts.
+    $flagsKey = "CARGO_TARGET_$($triple.ToUpper().Replace('-', '_'))_RUSTFLAGS"
+    Set-Item "Env:$flagsKey" $PinnedFlags
     Write-Host "== Installing rust target $triple"
-    & rustup target add $triple
-    if ($LASTEXITCODE -ne 0) { throw "rustup target add $triple failed" }
+    Push-Location $Src
+    try {
+        & rustup target add $triple
+        if ($LASTEXITCODE -ne 0) { throw "rustup target add $triple failed" }
+    } finally {
+        Pop-Location
+    }
 
     foreach ($crate in $Crates) {
         $crateDir = Join-Path $Src $crate

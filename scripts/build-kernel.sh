@@ -97,7 +97,6 @@ export ANDROID_NDK_HOME="$NDK"
 READELF="$(find "$NDK/toolchains/llvm/prebuilt" -path '*/bin/llvm-readelf' -type f 2>/dev/null | head -1 || true)"
 
 PINNED_FLAGS="-C link-arg=-Wl,-z,max-page-size=16384"
-export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }$PINNED_FLAGS"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$SRC/target}"
 mkdir -p "$CARGO_TARGET_DIR" "$OUT_ROOT"
 
@@ -125,8 +124,11 @@ for abi in "${ABI_LIST[@]}"; do
   abi="$(echo "$abi" | xargs)"
   [[ -z "$abi" ]] && continue
   triple="${TRIPLE_MAP[$abi]}"
+  # Target-specific rustflags avoid passing Android link flags to host build scripts.
+  flags_key="CARGO_TARGET_$(tr 'a-z-' 'A-Z_' <<< "$triple")_RUSTFLAGS"
+  export "$flags_key=$PINNED_FLAGS"
   echo "== Installing rust target $triple"
-  rustup target add "$triple"
+  ( cd "$SRC" && rustup target add "$triple" )
 
   for crate in "${CRATES[@]}"; do
     echo "== cargo ndk -t $abi --platform 26 build --release ($crate)"
