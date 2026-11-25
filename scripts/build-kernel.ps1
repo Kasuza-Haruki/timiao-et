@@ -108,6 +108,26 @@ if (Test-Path $PatchDir) {
     }
 }
 
+# Optional crates.io source replacement for slow networks.
+if ($env:EASYTIER_CRATES_MIRROR) {
+    $cfgPath = Join-Path $Src ".cargo/config.toml"
+    New-Item -ItemType Directory -Force (Split-Path $cfgPath -Parent) | Out-Null
+    $cfgText = if (Test-Path $cfgPath) { Get-Content -Raw $cfgPath } else { "" }
+    if ($cfgText -notmatch "easytier-crates-mirror") {
+        $block = @(
+            "",
+            "[source.crates-io]",
+            'replace-with = "easytier-crates-mirror"',
+            "",
+            "[source.easytier-crates-mirror]",
+            "registry = `"$($env:EASYTIER_CRATES_MIRROR)`"",
+            ""
+        ) -join "`n"
+        Add-Content -Path $cfgPath -Value $block
+        Write-Host "Crates mirror: $($env:EASYTIER_CRATES_MIRROR)"
+    }
+}
+
 # 3. Toolchain checks ------------------------------------------------------
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) { throw "cargo not found in PATH" }
 if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) { throw "rustup not found in PATH" }
@@ -141,26 +161,48 @@ $env:CARGO_TARGET_DIR = $TargetDir
 New-Item -ItemType Directory -Force $TargetDir | Out-Null
 New-Item -ItemType Directory -Force $OutRoot | Out-Null
 
-# The windows-gnu host linker's bundled dlltool needs GNU as, which is not
-# shipped. NDK's llvm-dlltool is a compatible drop-in.
+# Host C toolchain for build scripts. Rust's windows-gnu toolchain ships a
+# linker-only gcc and no GNU as, so aws-lc-sys and bindgen need a real MinGW
+# (gcc/as/dlltool + libclang). Set EASYTIER_MINGW_BIN to override.
 try {
     Push-Location $Src
     $hostTriple = ((& rustc -vV) | Select-String "^host:").ToString().Split(":")[1].Trim()
     Pop-Location
     if ($hostTriple -match "windows-gnu") {
-        $ndkBin = Get-ChildItem (Join-Path $Ndk "toolchains/llvm/prebuilt") -Directory |
-            ForEach-Object { Join-Path $_.FullName "bin" } | Where-Object { Test-Path $_ } |
-            Select-Object -First 1
-        $llvmDlltool = Join-Path $ndkBin "llvm-dlltool.exe"
-        if (Test-Path $llvmDlltool) {
-            $shimDir = Join-Path $TargetDir "host-bin"
-            New-Item -ItemType Directory -Force $shimDir | Out-Null
-            Copy-Item $llvmDlltool (Join-Path $shimDir "dlltool.exe") -Force
-            $env:PATH = "$shimDir;$env:PATH"
+        $mingwBin = $env:EASYTIER_MINGW_BIN
+        if (-not $mingwBin -and (Test-Path "${ANDROID_ENV}\mingw64\bin\gcc.exe")) {
+            $mingwBin = "${ANDROID_ENV}\mingw64\bin"
+        }
+        if ($mingwBin -and (Test-Path (Join-Path $mingwBin "gcc.exe"))) {
+            $mingwRoot = Split-Path $mingwBin -Parent
+            $env:PATH = "$mingwBin;$env:PATH"
+            if (Test-Path (Join-Path $mingwBin "libclang.dll")) {
+                $env:LIBCLANG_PATH = $mingwBin
+            }
+            $mingwInclude = Join-Path $mingwRoot "include"
+            if (Test-Path $mingwInclude) {
+                $hostKey = $hostTriple.ToUpper().Replace('-', '_')
+                $inc = "-I$($mingwInclude.Replace('\', '/'))"
+                Set-Item "Env:CFLAGS_$hostKey" $inc
+                Set-Item "Env:CXXFLAGS_$hostKey" $inc
+            }
+            Write-Host "Host C toolchain: $mingwBin"
+        } else {
+            Write-Warning "No MinGW gcc found. Set EASYTIER_MINGW_BIN to a MinGW bin directory."
+            $ndkBin = Get-ChildItem (Join-Path $Ndk "toolchains/llvm/prebuilt") -Directory |
+                ForEach-Object { Join-Path $_.FullName "bin" } | Where-Object { Test-Path $_ } |
+                Select-Object -First 1
+            $llvmDlltool = Join-Path $ndkBin "llvm-dlltool.exe"
+            if (Test-Path $llvmDlltool) {
+                $shimDir = Join-Path $TargetDir "host-bin"
+                New-Item -ItemType Directory -Force $shimDir | Out-Null
+                Copy-Item $llvmDlltool (Join-Path $shimDir "dlltool.exe") -Force
+                $env:PATH = "$shimDir;$env:PATH"
+            }
         }
     }
 } catch {
-    Write-Warning "Could not prepare dlltool shim: $_"
+    Write-Warning "Could not prepare host C toolchain: $_"
 }
 
 $Crates = @(

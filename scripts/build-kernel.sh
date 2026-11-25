@@ -76,6 +76,23 @@ if [[ -d "$PATCH_DIR" ]]; then
   done < <(find "$PATCH_DIR" -maxdepth 1 -name '*.patch' | sort)
 fi
 
+# Optional crates.io source replacement for slow networks.
+if [[ -n "${EASYTIER_CRATES_MIRROR:-}" ]]; then
+  mkdir -p "$SRC/.cargo"
+  cfg="$SRC/.cargo/config.toml"
+  if ! grep -q "easytier-crates-mirror" "$cfg" 2>/dev/null; then
+    cat >> "$cfg" <<EOF
+
+[source.crates-io]
+replace-with = "easytier-crates-mirror"
+
+[source.easytier-crates-mirror]
+registry = "$EASYTIER_CRATES_MIRROR"
+EOF
+    echo "Crates mirror: $EASYTIER_CRATES_MIRROR"
+  fi
+fi
+
 command -v cargo >/dev/null || { echo "cargo not found in PATH" >&2; exit 1; }
 command -v rustup >/dev/null || { echo "rustup not found in PATH" >&2; exit 1; }
 
@@ -93,6 +110,24 @@ if [[ -z "$NDK" || ! -d "$NDK" ]]; then
   exit 1
 fi
 export ANDROID_NDK_HOME="$NDK"
+
+# MSYS/Git Bash host: Rust's windows-gnu toolchain lacks a C compiler and as.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    if [[ -z "${EASYTIER_MINGW_BIN:-}" && -x /d/envs/mingw64/bin/gcc.exe ]]; then
+      EASYTIER_MINGW_BIN=/d/envs/mingw64/bin
+    fi
+    if [[ -n "${EASYTIER_MINGW_BIN:-}" && -x "$EASYTIER_MINGW_BIN/gcc.exe" ]]; then
+      export PATH="$EASYTIER_MINGW_BIN:$PATH"
+      [[ -f "$EASYTIER_MINGW_BIN/libclang.dll" ]] && export LIBCLANG_PATH="$EASYTIER_MINGW_BIN"
+      mingw_root="$(dirname "$EASYTIER_MINGW_BIN")"
+      if [[ -d "$mingw_root/include" ]]; then
+        export CFLAGS_x86_64_pc_windows_gnu="-I$mingw_root/include"
+        export CXXFLAGS_x86_64_pc_windows_gnu="-I$mingw_root/include"
+      fi
+    fi
+    ;;
+esac
 
 READELF="$(find "$NDK/toolchains/llvm/prebuilt" -path '*/bin/llvm-readelf' -type f 2>/dev/null | head -1 || true)"
 

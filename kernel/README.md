@@ -40,8 +40,26 @@ Requirements: Rust 1.95 (from upstream `rust-toolchain.toml`), `cargo-ndk`,
 Android NDK r27+ (`ANDROID_NDK_HOME`). `CARGO_TARGET_DIR` is honored; set it to
 a large disk, for example `${ANDROID_ENV}\cargo-target`.
 
+Windows-gnu hosts also need a real MinGW toolchain (gcc, as, dlltool) and
+libclang for `aws-lc-sys` and `kcp-sys`/bindgen. Rust's bundled windows-gnu gcc
+is linker-only. Set `EASYTIER_MINGW_BIN` to a MinGW `bin` directory; the script
+also auto-detects `${ANDROID_ENV}\mingw64\bin`. On a slow network, set
+`EASYTIER_CRATES_MIRROR` to a sparse registry, for example
+`sparse+https://mirrors.ustc.edu.cn/crates.io-index/`. If the pinned Rust 1.95
+toolchain is unavailable, set `RUSTUP_TOOLCHAIN=stable` (must be >= 1.95).
+
 Current build pins `-C link-arg=-Wl,-z,max-page-size=16384` so every LOAD
 segment is aligned to `0x4000` for Android 15 16 KB pages.
+
+### Verified build (v2.7.1)
+
+| ABI | libeasytier_android_jni.so | NEEDED | LOAD align |
+|---|---|---|---|
+| x86_64 | 20,491,640 bytes | liblog, libdl, libm, libc | 0x4000 |
+| arm64-v8a | see `kernel/out/arm64-v8a` | see build log | 0x4000 |
+
+The JNI library does not list `libeasytier_ffi.so` in `NEEDED`; FFI code is
+linked statically. The separate `libeasytier_ffi.so` is only for C ABI users.
 
 ## Patch policy
 
