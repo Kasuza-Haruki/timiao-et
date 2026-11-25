@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -111,7 +113,16 @@ public class FileConfigRepository(
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val _networks = MutableStateFlow<List<NetworkConfig>>(emptyList())
-    override val networks: StateFlow<List<NetworkConfig>> = _networks.asStateFlow()
+
+    /**
+     * Emits only after the first disk read finishes. The initial empty value of
+     * [_networks] must not reach collectors: a cold-start caller would see an
+     * empty list and conclude that no network exists.
+     */
+    override val networks: Flow<List<NetworkConfig>> = flow {
+        loaded.await()
+        emitAll(_networks)
+    }
     private val mutex = Mutex()
     private val loaded = CompletableDeferred<Unit>()
 

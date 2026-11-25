@@ -206,7 +206,8 @@ public class JniEngine(
     private val bridge: NativeBridge = JniNativeBridge(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val pollIntervalMs: Long = 1_000L,
-    private val maxDhcpAttempts: Int = 15,
+    /** Public-relay peers can need 20-40 s before they hand out a DHCP address. */
+    private val maxDhcpAttempts: Int = 40,
     private val now: () -> Long = { System.currentTimeMillis() },
 ) : Engine, AutoCloseable {
 
@@ -219,6 +220,8 @@ public class JniEngine(
     override val status: StateFlow<Map<String, NetworkStatus>> = _status.asStateFlow()
     private val running = ConcurrentHashMap<String, Running>()
     private val jobs = ConcurrentHashMap<String, Job>()
+    /** Ids whose start sequence is in flight; a second start must not race the first. */
+    private val starting = ConcurrentHashMap.newKeySet<String>()
     private val multiTun: MultiTunProvider? = tunProvider as? MultiTunProvider
     private val tunMutex = Mutex()
     private val specs = LinkedHashMap<String, TunSpec>()
@@ -231,7 +234,19 @@ public class JniEngine(
 
     public suspend fun start(config: NetworkConfig) {
         val key = config.id
-        if (jobs.containsKey(key)) return
+        if (jobs.containsKey(key) || running.containsKey(key)) return
+        // A duplicate start intent (for example a redelivered broadcast) must not run a
+        // second parse/run sequence on the same kernel instance name.
+        if (!starting.add(key)) return
+        try {
+            startInternal(config)
+        } finally {
+            starting.remove(key)
+        }
+    }
+
+    private suspend fun startInternal(config: NetworkConfig) {
+        val key = config.id
         var nativeStarted = false
         try {
             val toml = TomlCodec.exportToml(config)
@@ -348,6 +363,18 @@ public class JniEngine(
         jobs.clear()
         running.clear()
         scope.cancel()
+    }
+
+    /**
+     * Rebuilds the shared TUN from the current specs. The service calls this when the
+     * per-app split policy changes, so a change applies without a reconnect.
+     */
+    public suspend fun rebuildTun() {
+        tunMutex.withLock {
+            if (specs.isEmpty()) return
+            // The old fd stays current when establish fails; the next rebuild retries.
+            runCatching { rebuildTunLocked(requiredInstance = null) }
+        }
     }
 
     /** Reconciles address and peer proxy routes reported by the kernel into the TUN spec. */
