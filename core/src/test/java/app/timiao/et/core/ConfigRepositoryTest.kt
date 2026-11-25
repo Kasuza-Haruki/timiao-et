@@ -92,6 +92,33 @@ class ConfigRepositoryTest {
     }
 
     @Test
+    fun networksWaitsForInitialLoad() = runBlocking {
+        val file = File.createTempFile("timiao-config", ".bin")
+        file.deleteOnExit()
+        try {
+            val seed = FileConfigRepository(file, FakeCipher())
+            seed.awaitLoaded()
+            seed.save(sampleNetworkConfig().copy(instanceName = "cold"))
+
+            // A slow decrypt keeps the initial empty state visible long enough for a
+            // collector to see it if the flow emitted before the first read finished.
+            val slowCipher = object : SecretCipher {
+                private val delegate = FakeCipher()
+                override fun encrypt(plain: ByteArray): ByteArray = delegate.encrypt(plain)
+                override fun decrypt(sealed: ByteArray): ByteArray {
+                    Thread.sleep(200)
+                    return delegate.decrypt(sealed)
+                }
+            }
+            val repository = FileConfigRepository(file, slowCipher)
+            // No awaitLoaded(): the first emission itself must already be loaded.
+            assertEquals(1, repository.networks.first().size)
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
     fun fakeRepositoryKeepsSampleData() = runBlocking {
         val repository = FakeConfigRepository()
         assertEquals(1, repository.networks.first().size)

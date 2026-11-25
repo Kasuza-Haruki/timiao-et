@@ -66,6 +66,9 @@ fun GlassDock(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
+            // The dock floats over scrolling content, which the backdrop blur does not reach.
+            // A near-opaque surface under the glass keeps labels readable over any card.
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f), pill)
             .glass(pill, GlassLevel.Strong)
             .padding(8.dp),
     ) {
@@ -90,10 +93,7 @@ fun GlassDock(
                         .weight(1f)
                         .height(38.dp)
                         .clip(pill)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { onNavigate(item.route) },
+                        .clickable { onNavigate(item.route) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(

@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -36,8 +38,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -71,6 +77,7 @@ import app.timiao.et.ui.data.DefaultListeners
 import app.timiao.et.ui.data.DefaultProtocols
 import app.timiao.et.ui.data.EncryptionAlgorithms
 import app.timiao.et.ui.data.FlagGroups
+import app.timiao.et.ui.data.HIDDEN_SECRET
 import app.timiao.et.ui.data.PendingImport
 import app.timiao.et.ui.data.PortForwardDraft
 import app.timiao.et.ui.data.UiNetwork
@@ -83,10 +90,13 @@ import app.timiao.et.ui.data.joinLines
 import app.timiao.et.ui.data.newNetwork
 import app.timiao.et.ui.data.exportFileName
 import app.timiao.et.ui.data.hasInstanceIdConflict
+import app.timiao.et.ui.data.maskTomlSecrets
 import app.timiao.et.ui.data.parseLines
 import app.timiao.et.ui.data.parseProxyNetwork
 import app.timiao.et.ui.data.readTomlUri
 import app.timiao.et.ui.data.resolveImportId
+import app.timiao.et.ui.data.restoreHiddenSecrets
+import app.timiao.et.ui.data.revealTomlSecrets
 import app.timiao.et.ui.data.staticIpEditable
 import app.timiao.et.ui.data.toDraft
 import app.timiao.et.ui.data.toUi
@@ -167,6 +177,9 @@ fun NetworkEditScreen(
     var initialForm by remember(networkId) { mutableStateOf<UiNetwork?>(null) }
     var texts by remember(networkId) { mutableStateOf(Texts()) }
     var initialTexts by remember(networkId) { mutableStateOf(Texts()) }
+    val secretFocus = remember(networkId) { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    var secretFocusDone by rememberSaveable(networkId) { mutableStateOf(false) }
 
     LaunchedEffect(networkId, networks) {
         if (form == null) {
@@ -204,6 +217,9 @@ fun NetworkEditScreen(
 
     var mode by rememberSaveable(networkId) { mutableStateOf(EditMode.Form) }
     var tomlText by rememberSaveable(networkId) { mutableStateOf("") }
+    // Unmasked export the editor text came from; used to replay hidden values.
+    var tomlOriginText by rememberSaveable(networkId) { mutableStateOf("") }
+    var showTomlSecrets by rememberSaveable(networkId) { mutableStateOf(false) }
     var tomlError by rememberSaveable(networkId) { mutableStateOf<String?>(null) }
     var tomlBaseline by rememberSaveable(networkId) { mutableStateOf("") }
     var saveAttempted by rememberSaveable(networkId) { mutableStateOf(false) }
@@ -234,6 +250,17 @@ fun NetworkEditScreen(
         texts = Texts.of(ui)
     }
 
+    /** Unmasked config behind the current editor text, if it is still readable. */
+    fun tomlOrigin(): NetworkConfig? = tomlOriginText
+        .takeIf { it.isNotBlank() }
+        ?.let { runCatching { TomlCodec.importToml(it) }.getOrNull() }
+
+    /** Parses the editor text and puts hidden placeholders back to their real values. */
+    fun parseTomlRestored(): NetworkConfig {
+        val parsed = TomlCodec.importToml(tomlText)
+        return tomlOrigin()?.let { restoreHiddenSecrets(parsed, it) } ?: parsed
+    }
+
     fun applyImported(parsed: NetworkConfig, saveAsNew: Boolean) {
         val targetId = when {
             saveAsNew -> if (networkId == "new") current.id else UUID.randomUUID().toString()
@@ -262,7 +289,7 @@ fun NetworkEditScreen(
 
     fun buildExportText(excludeSecret: Boolean): String {
         if (mode == EditMode.Toml) {
-            val parsed = runCatching { TomlCodec.importToml(tomlText) }.getOrNull() ?: return tomlText
+            val parsed = runCatching { parseTomlRestored() }.getOrNull() ?: return tomlText
             return TomlCodec.exportToml(
                 if (excludeSecret) parsed.copy(networkSecret = "") else parsed,
             )
@@ -317,7 +344,10 @@ fun NetworkEditScreen(
             Toast.makeText(context, "网络名称不能为空", Toast.LENGTH_SHORT).show()
             return
         }
-        tomlText = vm.exportToml(ui)
+        val real = vm.exportToml(ui)
+        tomlOriginText = real
+        tomlText = maskTomlSecrets(real)
+        showTomlSecrets = false
         tomlBaseline = tomlText
         tomlError = null
         mode = EditMode.Toml
@@ -325,7 +355,7 @@ fun NetworkEditScreen(
 
     fun leaveTomlMode() {
         val parsed = try {
-            TomlCodec.importToml(tomlText)
+            parseTomlRestored()
         } catch (error: TomlParseException) {
             tomlError = error.message
             return
@@ -341,7 +371,7 @@ fun NetworkEditScreen(
     fun performSave() {
         if (mode == EditMode.Toml) {
             val parsed = try {
-                TomlCodec.importToml(tomlText)
+                parseTomlRestored()
             } catch (error: TomlParseException) {
                 tomlError = error.message
                 return
@@ -458,6 +488,30 @@ fun NetworkEditScreen(
 
         if (mode == EditMode.Toml) {
             item {
+                GlassSwitchRow(
+                    title = "显示敏感字段",
+                    subtitle = "关闭时密钥与私钥显示为 $HIDDEN_SECRET，保存时沿用原值",
+                    checked = showTomlSecrets,
+                    onCheckedChange = { checked ->
+                        if (checked) {
+                            tomlOrigin()?.let { origin ->
+                                tomlText = revealTomlSecrets(tomlText, origin)
+                            }
+                        } else {
+                            // Fold edits typed while shown into the origin first,
+                            // so hiding them does not drop them on save.
+                            runCatching { TomlCodec.importToml(tomlText) }.getOrNull()?.let { parsed ->
+                                val origin = tomlOrigin()
+                                val restored = origin?.let { restoreHiddenSecrets(parsed, it) } ?: parsed
+                                tomlOriginText = TomlCodec.exportToml(restored)
+                            }
+                            tomlText = maskTomlSecrets(tomlText)
+                        }
+                        showTomlSecrets = checked
+                    },
+                )
+            }
+            item {
                 GlassTextField(
                     value = tomlText,
                     onValueChange = { tomlText = it; tomlError = null },
@@ -507,15 +561,20 @@ fun NetworkEditScreen(
                 )
             }
             item {
-                Field(
-                    label = "网络密钥",
+                SecretField(
                     value = form!!.secret,
                     onChange = { form = form!!.copy(secret = it) },
-                    placeholder = "留空表示无密钥",
-                    mono = true,
-                    visualTransformation = PasswordVisualTransformation(),
                     focus = focus,
+                    focusRequester = secretFocus,
                 )
+                // A link/file without a secret opens here with the field ready to type.
+                LaunchedEffect(Unit) {
+                    if (openAction == "secret" && !secretFocusDone) {
+                        secretFocusDone = true
+                        runCatching { secretFocus.requestFocus() }
+                        keyboard?.show()
+                    }
+                }
             }
             item {
                 Field(
@@ -1535,7 +1594,7 @@ fun NetworkEditScreen(
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     if (hasSecret) {
                         Text(
-                            text = "文件包含网络密钥，请妥善保管。",
+                            text = "文件包含网络密钥，请妥善保管。复制到剪贴板时会遮罩密钥。",
                             color = g.warn,
                             style = MaterialTheme.typography.labelSmall,
                         )
@@ -1562,7 +1621,12 @@ fun NetworkEditScreen(
                         saveTomlFile.launch(pendingExportName)
                     }) { Text("保存为文件") }
                     TextButton(onClick = {
-                        copyToClipboard(context, "TOML", buildExportText(exportWithoutSecret))
+                        // Clipboard defaults to the masked form even when the file keeps secrets.
+                        copyToClipboard(
+                            context,
+                            "TOML",
+                            maskTomlSecrets(buildExportText(exportWithoutSecret)),
+                        )
                     }) { Text("复制") }
                 }
             },
@@ -1707,6 +1771,57 @@ private fun InlineError(text: String?) {
         style = MaterialTheme.typography.labelSmall,
         modifier = Modifier.padding(horizontal = 14.dp, vertical = 1.dp),
     )
+}
+
+/**
+ * Network secret input. A local copy of GlassTextField (the shared component cannot
+ * take a FocusRequester) so an import without a secret can focus this field.
+ */
+@Composable
+private fun SecretField(
+    value: String,
+    onChange: (String) -> Unit,
+    focus: androidx.compose.ui.focus.FocusManager,
+    focusRequester: FocusRequester,
+) {
+    val g = LocalGlassColors.current
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .glass(RoundedCornerShape(18.dp), GlassLevel.Subtle)
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+    ) {
+        Text("网络密钥", style = MaterialTheme.typography.labelSmall, color = g.muted)
+        BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 24.dp)
+                .focusRequester(focusRequester),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurface,
+                fontFamily = FontFamily.Monospace,
+            ),
+            singleLine = true,
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+            keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
+            visualTransformation = PasswordVisualTransformation(),
+            decorationBox = { inner ->
+                Box {
+                    if (value.isEmpty()) {
+                        Text(
+                            "留空表示无密钥",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = g.muted.copy(alpha = 0.7f),
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+    }
 }
 
 @Composable

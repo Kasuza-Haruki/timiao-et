@@ -181,6 +181,22 @@ class DiagnosticsEngineTest {
     }
 
     @Test
+    fun `no underlying network is a direct failure`() {
+        val result = report(device = FakeDevice(network = false))
+        val item = result.item("device_network")
+        assertEquals(DiagSeverity.Fail, item.severity)
+        assertTrue(item.summary.contains("设备当前没有可用网络"))
+        assertTrue(item.advice!!.contains("Wi-Fi"))
+        assertEquals(DiagSeverity.Fail, result.overall)
+    }
+
+    @Test
+    fun `available network passes`() {
+        val item = report().item("device_network")
+        assertEquals(DiagSeverity.Pass, item.severity)
+    }
+
+    @Test
     fun `connect error event is translated and gets port advice`() {
         val raw = rawInfos(
             listOf(
@@ -192,6 +208,34 @@ class DiagnosticsEngineTest {
         assertEquals(DiagSeverity.Warn, item.severity)
         assertTrue(item.details.first().contains("连接被拒绝"))
         assertTrue(item.advice!!.contains("端口"))
+    }
+
+    @Test
+    fun `network unreachable event fails with network advice`() {
+        val raw = rawInfos(
+            listOf(
+                """{"event":{"ConnectError":["udp://1.2.3.4:11010","V4","Network is unreachable"]}}""",
+            ),
+        )
+        val result = report(status = connected(), raw = raw)
+        val item = result.item("events")
+        assertEquals(DiagSeverity.Fail, item.severity)
+        assertTrue(item.advice!!.contains("网络不可达"))
+        assertEquals(DiagSeverity.Fail, result.overall)
+    }
+
+    @Test
+    fun `handshake failure event fails with key advice`() {
+        val raw = rawInfos(
+            listOf(
+                """{"event":{"ConnectionError":["peer","10.0.0.2:11010","handshake failed: decrypt error"]}}""",
+            ),
+        )
+        val result = report(status = connected(), raw = raw)
+        val item = result.item("events")
+        assertEquals(DiagSeverity.Fail, item.severity)
+        assertTrue(item.advice!!.contains("密钥"))
+        assertEquals(DiagSeverity.Fail, result.overall)
     }
 
     @Test
@@ -253,10 +297,12 @@ class DiagnosticsEngineTest {
         private val vpn: Boolean = true,
         private val battery: Boolean = true,
         private val notifications: Boolean = true,
+        private val network: Boolean = true,
     ) : DeviceProbe {
         override fun hasVpnPermission(): Boolean = vpn
         override fun isIgnoringBatteryOptimizations(): Boolean = battery
         override fun hasNotificationPermission(): Boolean = notifications
+        override fun hasUnderlyingNetwork(): Boolean = network
     }
 
     private fun rawInfos(events: List<String>, nat: String? = "PortRestricted"): String {

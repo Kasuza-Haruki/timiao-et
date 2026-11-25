@@ -6,9 +6,12 @@ import app.timiao.et.core.PeerInfo
  * Layered tree layout for the topology card.
  *
  * Peers are placed in BFS layers by `next_hop_peer_id`: direct peers are below the local node,
- * relays go below their next hop. Each layer wraps into centred rows of fixed-width cells, so
- * 0/1/3/10/30 nodes never overlap and always stay inside the given width. The card height grows
- * with the number of rows; the surrounding lazy list scrolls.
+ * relays go below their next hop. Each layer gets a cell width that fills the card, so 1/2/3
+ * nodes spread out instead of clustering. A layer wraps into centred rows when it has more
+ * nodes than fit; the card height grows and the surrounding lazy list scrolls.
+ *
+ * Node labels sit *below* the circles. The layout reserves that block in every row, so edges
+ * never cross label text. [fontScale] grows the reserved block with the system font scale.
  */
 internal data class TopoNode(
     val key: String,
@@ -18,6 +21,8 @@ internal data class TopoNode(
     val isRelay: Boolean,
     val xDp: Float,
     val yDp: Float,
+    /** Maximum width for this node's label. */
+    val cellWDp: Float,
 )
 
 internal data class TopoEdge(
@@ -34,19 +39,27 @@ internal data class TopoLayout(
 
 internal object TopologyLayout {
     const val ROOT_KEY = "__self__"
+
+    /** Minimum cell width. Wider layers share the full card width. */
     const val CELL_W_DP = 92f
-    const val ROW_H_DP = 70f
-    const val NODE_R_DP = 15f
+
+    /** Default row height at font scale 1. Kept for tests; actual rows scale with fontScale. */
+    const val ROW_H_DP = 90f
+
+    const val NODE_R_DP = 21f
+
     private const val TOP_PAD_DP = 12f
-    private const val BOTTOM_PAD_DP = 10f
+    private const val BOTTOM_PAD_DP = 12f
     private const val SIDE_PAD_DP = 6f
-    private const val LEVEL_GAP_DP = 12f
+    private const val LEVEL_GAP_DP = 18f
+    private const val LABEL_BLOCK_DP = 30f
 
     fun layout(
         peers: List<PeerInfo>,
         myIpv4: String?,
         myPeerId: String?,
         widthDp: Float,
+        fontScale: Float = 1f,
     ): TopoLayout {
         val keys = peers.mapIndexed { index, peer ->
             peer.peerId?.let { "peer:$it" } ?: "n:$index"
@@ -93,8 +106,8 @@ internal object TopologyLayout {
         }
 
         val usable = (widthDp - SIDE_PAD_DP * 2).coerceAtLeast(CELL_W_DP)
-        val cellW = CELL_W_DP
-        val perRow = (usable / cellW).toInt().coerceAtLeast(1)
+        val perRowCap = (usable / CELL_W_DP).toInt().coerceAtLeast(1)
+        val rowHeight = NODE_R_DP * 2 + LABEL_BLOCK_DP * fontScale.coerceIn(0.85f, 2f) + LEVEL_GAP_DP
 
         val nodes = mutableListOf<TopoNode>()
         val rootY = TOP_PAD_DP + NODE_R_DP
@@ -106,11 +119,14 @@ internal object TopologyLayout {
             isRelay = false,
             xDp = widthDp / 2f,
             yDp = rootY,
+            cellWDp = usable,
         )
 
-        var cursor = TOP_PAD_DP + ROW_H_DP
+        var cursor = TOP_PAD_DP + rowHeight
         layers.forEach { layer ->
+            val perRow = minOf(layer.size.coerceAtLeast(1), perRowCap)
             val rows = (layer.size + perRow - 1) / perRow
+            val cellW = usable / perRow
             for (row in 0 until rows) {
                 val from = row * perRow
                 val rowItems = layer.subList(from, minOf(from + perRow, layer.size))
@@ -126,11 +142,12 @@ internal object TopologyLayout {
                         isRoot = false,
                         isRelay = peer.isRelay(),
                         xDp = startX + column * cellW,
-                        yDp = cursor + row * ROW_H_DP + NODE_R_DP,
+                        yDp = cursor + row * rowHeight + NODE_R_DP,
+                        cellWDp = cellW,
                     )
                 }
             }
-            cursor += rows * ROW_H_DP + LEVEL_GAP_DP
+            cursor += rows * rowHeight + LEVEL_GAP_DP
         }
 
         val edges = mutableListOf<TopoEdge>()
@@ -143,7 +160,7 @@ internal object TopologyLayout {
             )
         }
 
-        val height = (cursor - LEVEL_GAP_DP + BOTTOM_PAD_DP).coerceAtLeast(ROW_H_DP)
+        val height = (cursor - LEVEL_GAP_DP + BOTTOM_PAD_DP).coerceAtLeast(rowHeight)
         return TopoLayout(nodes, edges, height)
     }
 

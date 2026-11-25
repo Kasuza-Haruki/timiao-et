@@ -6,11 +6,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class JniEngineTest {
 
@@ -42,6 +45,7 @@ class JniEngineTest {
     private class RecordingBridge(
         var runResult: Int = 0,
         var json: String? = null,
+        private val beforeRun: (() -> Unit)? = null,
     ) : NativeBridge {
         val calls = mutableListOf<String>()
         val observedToml = mutableListOf<String>()
@@ -55,6 +59,7 @@ class JniEngineTest {
         override fun runNetworkInstance(config: String): Int {
             calls += "runNetworkInstance"
             observedToml += config
+            beforeRun?.invoke()
             return runResult
         }
 
@@ -467,6 +472,98 @@ class JniEngineTest {
             val builds = tun.merged.size
             delay(100)
             assertEquals(builds, tun.merged.size)
+        } finally {
+            engine.close()
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun rebuildTunReattachesRunningNetworks() = runBlocking {
+        val bridge = RecordingBridge()
+        val tun = RecordingMultiTun()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val engine = JniEngine(
+            configs = FakeConfigRepository(),
+            tunProvider = tun,
+            bridge = bridge,
+            scope = scope,
+            pollIntervalMs = 10,
+        )
+        val config = sampleNetworkConfig().copy(
+            instanceName = "a",
+            dhcp = false,
+            ipv4 = "10.0.0.1/24",
+        )
+
+        try {
+            engine.start(config)
+            assertEquals(1, tun.merged.size)
+            assertEquals(listOf(10), tun.adopted)
+
+            // A split-policy change asks the engine to rebuild the TUN in place.
+            engine.rebuildTun()
+
+            assertEquals(2, tun.merged.size)
+            assertEquals(listOf(10, 11), tun.adopted)
+            assertTrue(tun.released.contains(10))
+            assertTrue(bridge.calls.contains("setTunFd:a:11"))
+        } finally {
+            engine.close()
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun rebuildTunWithoutNetworksIsANoOp() = runBlocking {
+        val tun = RecordingMultiTun()
+        val engine = JniEngine(
+            configs = FakeConfigRepository(),
+            tunProvider = tun,
+            bridge = RecordingBridge(),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            pollIntervalMs = 10,
+        )
+
+        try {
+            engine.rebuildTun()
+            assertTrue(tun.merged.isEmpty())
+        } finally {
+            engine.close()
+        }
+    }
+
+    @Test
+    fun concurrentStartRunsOneNativeInstance() = runBlocking {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val bridge = RecordingBridge(beforeRun = {
+            entered.countDown()
+            release.await()
+        })
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val engine = JniEngine(
+            configs = FakeConfigRepository(),
+            tunProvider = RecordingMultiTun(),
+            bridge = bridge,
+            scope = scope,
+            pollIntervalMs = 10,
+        )
+        val config = sampleNetworkConfig().copy(
+            instanceName = "a",
+            dhcp = false,
+            ipv4 = "10.0.0.1/24",
+        )
+
+        try {
+            val first = launch(Dispatchers.Default) { engine.start(config) }
+            assertTrue(entered.await(2, TimeUnit.SECONDS))
+            // The second start returns at once instead of running a second native sequence.
+            engine.start(config)
+            release.countDown()
+            first.join()
+
+            assertEquals(1, bridge.calls.count { it == "runNetworkInstance" })
         } finally {
             engine.close()
             scope.cancel()

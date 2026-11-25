@@ -99,13 +99,36 @@ Invoke-Git $Src @("reset", "--hard", $Tag)
 $head = (& git -C $Src rev-parse --short HEAD).Trim()
 Write-Host "EasyTier source: $Src @ $head ($Tag)"
 
-# 2. Apply patches ---------------------------------------------------------
+# 2. Apply patches (best effort) -------------------------------------------
+# A patch that no longer applies must not block the build. Record its status
+# in kernel/out/PATCH_STATUS.txt and keep going with the remaining patches.
+New-Item -ItemType Directory -Force $OutRoot | Out-Null
+$PatchStatusFile = Join-Path $OutRoot "PATCH_STATUS.txt"
+$PatchStatus = @()
 if (Test-Path $PatchDir) {
     Get-ChildItem -Path $PatchDir -Filter "*.patch" | Sort-Object Name | ForEach-Object {
-        Write-Host "Applying patch $($_.Name)"
-        Invoke-Git $Src @("apply", "--check", $_.FullName)
-        Invoke-Git $Src @("apply", $_.FullName)
+        $name = $_.Name
+        & git -C $Src apply --check $_.FullName 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            & git -C $Src apply $_.FullName
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "Applied patch $name"
+                $PatchStatus += "$name`: APPLIED"
+            } else {
+                Write-Warning "PATCH APPLY FAILED: $name. Continuing without it."
+                $PatchStatus += "$name`: FAILED"
+            }
+        } else {
+            Write-Warning "PATCH NOT APPLICABLE: $name (upstream changed?). Continuing without it."
+            $PatchStatus += "$name`: FAILED"
+        }
     }
+}
+Set-Content -Path $PatchStatusFile -Value $PatchStatus
+$failedPatches = @($PatchStatus | Where-Object { $_ -like "*: FAILED" })
+if ($failedPatches.Count -gt 0) {
+    Write-Warning "Patches needing rebase: $($failedPatches -join ', ')"
+    Write-Warning "The build continues without them. Status: $PatchStatusFile"
 }
 
 # Optional crates.io source replacement for slow networks.
@@ -245,13 +268,16 @@ foreach ($abi in $AbiList) {
     $outDir = Join-Path $OutRoot $abi
     New-Item -ItemType Directory -Force $outDir | Out-Null
     Copy-Item $jniSo $outDir -Force
-    $ffiSo = Join-Path $releaseDir "libeasytier_ffi.so"
-    if (Test-Path $ffiSo) { Copy-Item $ffiSo $outDir -Force }
+    # easytier-ffi is linked statically into the JNI library. The separate
+    # libeasytier_ffi.so is never loaded by the app, so keep it out of the
+    # shipped output and remove any stale copy from an earlier build.
+    Remove-Item (Join-Path $outDir "libeasytier_ffi.so") -Force -ErrorAction SilentlyContinue
 
     if (-not $NoJniLibs) {
         $libsDir = Join-Path $JniLibsRoot $abi
         New-Item -ItemType Directory -Force $libsDir | Out-Null
-        Copy-Item (Join-Path $outDir "*.so") $libsDir -Force
+        Copy-Item $jniSo $libsDir -Force
+        Remove-Item (Join-Path $libsDir "libeasytier_ffi.so") -Force -ErrorAction SilentlyContinue
     }
 
     $so = Get-Item $jniSo

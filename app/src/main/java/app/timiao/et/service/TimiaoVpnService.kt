@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.Network
@@ -46,6 +47,9 @@ class TimiaoVpnService : VpnService() {
     /** Replaced fds kept open until the engine confirms every instance uses the new one. */
     private val retiredFds = mutableListOf<Int>()
     private val activeIds = linkedSetOf<String>()
+    private var splitObserver: SharedPreferences.OnSharedPreferenceChangeListener? = null
+    /** Set by the first start/stop command so onCreate cannot stop the service too early. */
+    @Volatile private var commandSeen = false
 
     private val engine get() = (application as TimiaoApplication).container.nativeEngine
     private val trafficRecorder get() = (application as TimiaoApplication).container.trafficRecorder
@@ -62,42 +66,61 @@ class TimiaoVpnService : VpnService() {
         ensureChannel()
         startForegroundCompat(buildNotification(null, 0))
         registerTrafficPolicyCallback()
+        // Rebuild the running TUN when the split policy changes, so the new app filter
+        // takes effect immediately instead of on the next connect.
+        splitObserver = SplitStore(this).observe {
+            val running = synchronized(activeIds) { activeIds.isNotEmpty() }
+            if (running) scope.launch { runCatching { engine.rebuildTun() } }
+        }
         scope.launch {
             engine.status.collectLatest { map ->
                 val live = map.filterValues {
                     it.state == LinkState.Connected || it.state == LinkState.Connecting
                 }
+                // Stop before notifying an empty state: a notify after stopForeground()
+                // would leave a stale notification behind.
+                if (live.isEmpty() && synchronized(activeIds) { activeIds.isEmpty() } && commandSeen) {
+                    stopSelf()
+                    return@collectLatest
+                }
+                // The service is still foreground here, so a plain notify() updates it.
                 notificationManager().notify(NOTIF_ID, buildNotification(live.values.firstOrNull(), live.size))
-                if (live.isEmpty() && activeIds.isEmpty()) stopSelf()
             }
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.i(TAG, "command ${intent?.action} id=${intent?.getStringExtra(EXTRA_ID)} active=$activeIds")
+        commandSeen = true
+        Log.i(TAG, "command ${intent?.action} id=${intent?.getStringExtra(EXTRA_ID)} active=${synchronized(activeIds) { activeIds.toList() }}")
         when (intent?.action) {
             ACTION_START -> intent.getStringExtra(EXTRA_ID)?.let { id ->
                 if (!allowTrafficStart()) {
-                    if (activeIds.isEmpty()) {
+                    if (synchronized(activeIds) { activeIds.isEmpty() }) {
                         stopForeground(STOP_FOREGROUND_REMOVE)
                         stopSelf()
                     }
                     return START_NOT_STICKY
                 }
-                activeIds += id
+                synchronized(activeIds) { activeIds += id }
                 ServiceState.setLast(this, id)
                 scope.launch {
-                    runCatching { engine.start(id) }.onFailure { activeIds -= id }
+                    runCatching { engine.start(id) }
+                        .onFailure {
+                            Log.w(TAG, "start $id failed: ${it.message}")
+                            synchronized(activeIds) { activeIds -= id }
+                        }
                 }
             }
             ACTION_STOP -> scope.launch {
-                val ids = intent.getStringExtra(EXTRA_ID)?.let { listOf(it) } ?: activeIds.toList()
+                val ids = synchronized(activeIds) {
+                    intent.getStringExtra(EXTRA_ID)?.let { listOf(it) } ?: activeIds.toList()
+                }
                 ids.forEach { id ->
                     runCatching { engine.stop(id) }.onFailure { Log.w(TAG, "stop $id failed: ${it.message}") }
-                    activeIds -= id
+                    synchronized(activeIds) { activeIds -= id }
                 }
-                Log.i(TAG, "after stop active=$activeIds")
-                if (activeIds.isEmpty()) {
+                Log.i(TAG, "after stop active=${synchronized(activeIds) { activeIds.toList() }}")
+                if (synchronized(activeIds) { activeIds.isEmpty() }) {
                     closeTun()
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
@@ -175,8 +198,9 @@ class TimiaoVpnService : VpnService() {
 
     override fun onRevoke() {
         scope.launch {
-            activeIds.toList().forEach { runCatching { engine.stop(it) } }
-            activeIds.clear()
+            val ids = synchronized(activeIds) { activeIds.toList() }
+            ids.forEach { runCatching { engine.stop(it) } }
+            synchronized(activeIds) { activeIds.clear() }
             closeTun()
             stopSelf()
         }
@@ -190,6 +214,8 @@ class TimiaoVpnService : VpnService() {
         }
         trafficCallback = null
         VpnTunProvider.service = null
+        splitObserver?.let { SplitStore(this).stopObserving(it) }
+        splitObserver = null
         closeTun()
         scope.cancel()
         super.onDestroy()
@@ -236,13 +262,14 @@ class TimiaoVpnService : VpnService() {
     }
 
     private suspend fun enforceTrafficPolicy() {
-        if (activeIds.isEmpty()) return
+        val runningIds = synchronized(activeIds) { activeIds.toList() }
+        if (runningIds.isEmpty()) return
         val kind = currentNetworkKind(getSystemService(ConnectivityManager::class.java))
         when (trafficRecorder.decision(kind)) {
             TrafficDecision.Block -> {
-                activeIds.toList().forEach { id ->
+                runningIds.forEach { id ->
                     runCatching { engine.stop(id) }
-                    activeIds -= id
+                    synchronized(activeIds) { activeIds -= id }
                 }
                 closeTun()
                 notifyPolicyBlocked()

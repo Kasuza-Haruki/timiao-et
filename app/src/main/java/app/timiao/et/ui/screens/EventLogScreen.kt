@@ -39,12 +39,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.timiao.et.core.NetworkEvent
 import app.timiao.et.core.NetworkEventKind
 import app.timiao.et.ui.AppViewModel
-import app.timiao.et.ui.components.DockInset
 import app.timiao.et.ui.components.EmptyGlassCard
 import app.timiao.et.ui.components.GlassLevel
+import app.timiao.et.ui.components.GlassPillAction
 import app.timiao.et.ui.components.ScreenHeader
 import app.timiao.et.ui.components.SegmentedGlass
 import app.timiao.et.ui.components.glass
+import app.timiao.et.ui.components.pageInset
 import app.timiao.et.ui.theme.LocalGlassColors
 import app.timiao.et.ui.util.copyToClipboard
 import app.timiao.et.ui.util.eventTypeLabel
@@ -84,7 +85,7 @@ fun EventLogScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = DockInset,
+        contentPadding = pageInset(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
@@ -93,14 +94,10 @@ fun EventLogScreen(
                 subtitle = active?.let { "${it.name} · ${status.events.size} 条" } ?: "未选择网络",
                 onBack = onBack,
                 action = {
-                    Text(
+                    GlassPillAction(
                         text = "复制",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                        color = if (events.isEmpty()) g.muted else MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .clickable(enabled = events.isNotEmpty()) { copyAll() }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        onClick = { copyAll() },
+                        enabled = events.isNotEmpty(),
                     )
                 },
             )
@@ -118,7 +115,7 @@ fun EventLogScreen(
         }
         item {
             Text(
-                text = "内核最多保留 20 条事件，每秒刷新。长按一条可复制。",
+                text = "最新事件在前，长按一条可复制。",
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 6.dp),

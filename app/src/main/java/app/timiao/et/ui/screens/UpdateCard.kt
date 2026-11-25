@@ -216,7 +216,7 @@ private fun summaryOf(result: UpdateResult?, loading: Boolean, isKernel: Boolean
         )
         is UpdateResult.UpToDate -> UpdateSummary(
             status = "已是最新",
-            detail = if (isKernel) "官方稳定版 v${result.latest}，当前内核不落后" else null,
+            detail = if (isKernel) null else null,
             color = g.good,
         )
         UpdateResult.Unknown -> UpdateSummary(

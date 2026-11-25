@@ -365,10 +365,25 @@ internal object StatusChecks {
 
 internal object DeviceChecks {
     fun run(probe: DeviceProbe): List<DiagItem> = listOf(
+        network(probe),
         vpn(probe),
         battery(probe),
         notifications(probe),
     )
+
+    /** Answers "no Internet at all" without waiting for a kernel event. */
+    private fun network(probe: DeviceProbe): DiagItem =
+        if (probe.hasUnderlyingNetwork()) {
+            DiagItem("device_network", "设备网络", DiagSeverity.Pass, "设备当前有可用网络")
+        } else {
+            DiagItem(
+                id = "device_network",
+                title = "设备网络",
+                severity = DiagSeverity.Fail,
+                summary = "设备当前没有可用网络",
+                advice = "打开 Wi-Fi 或移动数据，等系统显示网络可用后再诊断和连接。",
+            )
+        }
 
     private fun vpn(probe: DeviceProbe): DiagItem = if (probe.hasVpnPermission()) {
         DiagItem("device_vpn", "VPN 权限", DiagSeverity.Pass, "已获得 VPN 授权")
@@ -435,8 +450,12 @@ internal object EventChecks {
             it.type == "ConnectError" || it.type == "ConnectionError" ||
                 it.type == "ListenerAddFailed" || it.type == "ListenerAcceptFailed"
         }
+        // A local link can look "connected" while an auth or network failure blocks
+        // every peer. Those are failures, not FYI warnings.
+        val blocking = errors.any(::blocksConnectivity)
         val severity = when {
             fatal.isNotEmpty() -> DiagSeverity.Fail
+            blocking -> DiagSeverity.Fail
             errors.isNotEmpty() -> DiagSeverity.Warn
             else -> DiagSeverity.Pass
         }
@@ -466,12 +485,21 @@ internal object EventChecks {
             "timed out" in raw || "timeout" in raw -> "连接超时：检查服务器地址、端口转发和防火墙规则。"
             "dns" in raw || "resolve" in raw || "lookup" in raw ->
                 "域名解析失败：检查域名拼写、DNS 设置，或改用 IP 地址。"
-            "unreachable" in raw || "no route" in raw ->
+            "unreachable" in raw || "no route" in raw || "network is down" in raw ->
                 "网络不可达：检查手机网络、代理设置，以及是否有其他 VPN 冲突。"
             "handshake" in raw || "decrypt" in raw || "auth" in raw ->
                 "握手或认证失败：核对网络名与密钥，确认双方版本兼容。"
             event.fatal -> "先解决上面的严重事件（虚拟网卡或 IP 冲突），再重新连接。"
             else -> "根据上方事件详情检查服务器状态、网络名与密钥。"
         }
+    }
+
+    /** Auth failures and a dead underlying network stop all peers; treat them as failures. */
+    private fun blocksConnectivity(event: DiagEvent): Boolean {
+        val raw = event.errorText.orEmpty().lowercase(java.util.Locale.US)
+        return listOf(
+            "handshake", "decrypt", "auth", "invalid secret", "wrong secret",
+            "unreachable", "no route", "network is down",
+        ).any { it in raw }
     }
 }

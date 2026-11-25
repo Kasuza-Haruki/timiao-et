@@ -1,5 +1,6 @@
 package app.timiao.et.ui.navigation
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -7,7 +8,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.unit.IntOffset
 import app.timiao.et.ui.theme.LocalReducedMotion
@@ -16,10 +19,12 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -62,14 +67,8 @@ object Routes {
     fun edit(id: String, open: String = "none") = "network/$id?open=$open"
 }
 
-/** Screens pushed on top of a tab; the dock keeps the owning tab highlighted. */
-private fun dockOwner(route: String?): String? = when (route) {
-    Routes.NODE_INFO -> Routes.HOME
-    Routes.EVENT_LOG -> Routes.PEERS
-    Routes.SCAN -> Routes.NETWORKS
-    Routes.DIAGNOSTICS, Routes.TRAFFIC, AUTO_RULES_ROUTE, SplitRoutes.PATTERN -> Routes.SETTINGS
-    else -> if (route?.startsWith("share/") == true) Routes.NETWORKS else route
-}
+/** Tabs only; every pushed page uses its own back button and hides the dock. */
+private val TabRoutes = setOf(Routes.HOME, Routes.PEERS, Routes.NETWORKS, Routes.SETTINGS)
 
 @Composable
 fun TimiaoRoot(vm: AppViewModel) {
@@ -77,11 +76,17 @@ fun TimiaoRoot(vm: AppViewModel) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
 
-    val dockRoute = when {
-        route == null -> Routes.HOME
-        route.startsWith("network/") -> Routes.NETWORKS
-        else -> dockOwner(route) ?: Routes.HOME
+    // Deep-link/file import finished: show the imported network so the user can check it.
+    val pendingOpen by vm.pendingOpenNetwork.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingOpen) {
+        val target = pendingOpen ?: return@LaunchedEffect
+        vm.consumePendingOpenNetwork()
+        nav.navigate(Routes.edit(target.id, if (target.focusSecret) "secret" else "none")) {
+            launchSingleTop = true
+        }
     }
+
+    val dockRoute = route?.takeIf { it in TabRoutes }
 
     Box(Modifier.fillMaxSize()) {
         GlassBackdrop()
@@ -134,7 +139,11 @@ fun TimiaoRoot(vm: AppViewModel) {
                 val ctx = androidx.compose.ui.platform.LocalContext.current
                 val container = (ctx.applicationContext as app.timiao.et.TimiaoApplication).container
                 app.timiao.et.ui.screens.ScanScreen(
-                    importSink = { toml, _ -> importSharedToml(container, toml) },
+                    importSink = { toml, hasSecret ->
+                        val cfg = importSharedToml(container, toml)
+                        // Same hand-off as a deep link: open the editor, focus the secret if absent.
+                        vm.requestOpenNetwork(cfg.id, focusSecret = !hasSecret)
+                    },
                     onBack = { nav.popBackStack() },
                 )
             }
@@ -173,14 +182,28 @@ fun TimiaoRoot(vm: AppViewModel) {
                 )
             }
         }
-        GlassDock(
-            currentRoute = dockRoute,
-            onNavigate = { target -> nav.navigateTopLevel(target) },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(horizontal = 18.dp, vertical = 10.dp),
-        )
+        AnimatedVisibility(
+            visible = dockRoute != null,
+            enter = if (reduced) {
+                EnterTransition.None
+            } else {
+                fadeIn(tween(180)) + slideInVertically(tween(240)) { it / 2 }
+            },
+            exit = if (reduced) {
+                ExitTransition.None
+            } else {
+                fadeOut(tween(120)) + slideOutVertically(tween(170)) { it / 3 }
+            },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            GlassDock(
+                currentRoute = dockRoute,
+                onNavigate = { target -> nav.navigateTopLevel(target) },
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            )
+        }
     }
 }
 
@@ -222,10 +245,14 @@ private fun NavHostController.navigateTopLevel(route: String) {
 }
 
 /** Saves an imported config; a repeated instance id gets a fresh one so two devices never collide. */
-suspend fun importSharedToml(container: app.timiao.et.di.AppContainer, toml: String) {
+suspend fun importSharedToml(
+    container: app.timiao.et.di.AppContainer,
+    toml: String,
+): app.timiao.et.core.NetworkConfig {
     var cfg = container.configRepository.importToml(toml)
     if (container.configRepository.get(cfg.id) != null) {
         cfg = cfg.copy(instanceId = java.util.UUID.randomUUID().toString())
     }
     container.configRepository.save(cfg)
+    return cfg
 }
