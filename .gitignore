@@ -13,3 +13,4 @@ app/src/main/jniLibs/
 .kotlin/
 
 kernel/build-redact.log
+dist/
