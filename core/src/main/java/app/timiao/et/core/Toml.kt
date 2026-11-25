@@ -52,8 +52,8 @@ internal class TomlSyntaxError(val position: Int, message: String) : Exception(m
 public class TomlParseException(
     public val line: Int,
     public val column: Int,
-    message: String,
-) : IllegalArgumentException(message)
+    public val reason: String,
+) : IllegalArgumentException("第 $line 行第 $column 列：$reason")
 
 internal fun tomParseException(text: String, error: TomlSyntaxError): TomlParseException {
     val offset = error.position.coerceIn(0, text.length)
@@ -67,7 +67,7 @@ internal fun tomParseException(text: String, error: TomlSyntaxError): TomlParseE
     }
     val column = offset - lineStart + 1
     val reason = error.message.orEmpty().replace(Regex("""\s+at \d+$"""), "")
-    return TomlParseException(line, column, "第 $line 行第 $column 列：$reason")
+    return TomlParseException(line, column, reason)
 }
 
 internal class TomlParser(private val src: String) {

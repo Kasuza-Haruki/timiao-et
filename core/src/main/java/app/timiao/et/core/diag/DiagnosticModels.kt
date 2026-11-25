@@ -6,11 +6,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Result of one diagnostic check. */
-public enum class DiagSeverity(val label: String) {
-    Pass("通过"),
-    Warn("警告"),
-    Fail("失败");
+/** Result of one diagnostic check. [key] is language-neutral for app-side labels. */
+public enum class DiagSeverity(public val key: String) {
+    Pass("pass"),
+    Warn("warn"),
+    Fail("fail");
 
     public companion object {
         public fun worst(values: Iterable<DiagSeverity>): DiagSeverity = when {
@@ -21,7 +21,7 @@ public enum class DiagSeverity(val label: String) {
     }
 }
 
-/** One check: short conclusion plus concrete advice. */
+/** One check: short conclusion plus concrete advice. Texts are already localized. */
 public data class DiagItem(
     val id: String,
     val title: String,
@@ -49,26 +49,26 @@ public data class DiagnosticReport(
     public val warnCount: Int get() = items.count { it.severity == DiagSeverity.Warn }
     public val failCount: Int get() = items.count { it.severity == DiagSeverity.Fail }
 
-    public val headline: String
-        get() = when (overall) {
-            DiagSeverity.Pass -> "检查通过，没有发现问题"
-            DiagSeverity.Warn -> "可以使用，但有几项值得注意"
-            DiagSeverity.Fail -> "发现问题，请按建议逐项处理"
-        }
+    public fun headline(strings: DiagStrings = ChineseDiagStrings): String =
+        strings.get("diag_headline_${overall.key}")
 
     /** Plain-text summary suitable for the clipboard. Never contains the network secret. */
-    public fun plainText(): String {
+    public fun plainText(strings: DiagStrings = ChineseDiagStrings): String {
         val text = StringBuilder()
-        text.appendLine("缇喵 · 网络诊断")
-        text.appendLine("结论：$headline")
-        text.appendLine("时间：${formatTime(generatedAtEpochMs)}")
-        text.appendLine("检查：${items.size} 项 · 通过 $passCount · 警告 $warnCount · 失败 $failCount")
-        text.appendLine("本报告不包含网络密钥。")
+        text.appendLine(strings.get("diag_report_title"))
+        text.appendLine(strings.get("diag_report_conclusion", headline(strings)))
+        text.appendLine(strings.get("diag_report_time", formatTime(generatedAtEpochMs)))
+        text.appendLine(
+            strings.get("diag_report_checks", items.size, passCount, warnCount, failCount),
+        )
+        text.appendLine(strings.get("diag_report_no_secret"))
         text.appendLine()
         items.forEach { item ->
-            text.appendLine("[${item.severity.label}] ${item.title}")
+            text.appendLine("[${strings.get("diag_sev_${item.severity.key}")}] ${item.title}")
             text.appendLine("  ${item.summary}")
-            item.advice?.takeIf { it.isNotBlank() }?.let { text.appendLine("  建议：$it") }
+            item.advice?.takeIf { it.isNotBlank() }?.let {
+                text.appendLine("  ${strings.get("diag_report_advice", it)}")
+            }
             item.details.forEach { text.appendLine("  · $it") }
             text.appendLine()
         }
@@ -77,7 +77,7 @@ public data class DiagnosticReport(
 }
 
 private fun formatTime(epochMs: Long): String =
-    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA).format(Date(epochMs))
+    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(epochMs))
 
 /** Replaces the secret in every free-text field. Defence in depth: checkers never print it. */
 internal fun DiagItem.redacted(secret: String): DiagItem {

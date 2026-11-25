@@ -3,6 +3,7 @@ package app.timiao.et.share
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import app.timiao.et.R
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 
@@ -42,7 +43,7 @@ object ImportIntents {
                 sink.import(result.request.toml, result.request.hasSecret)
                 result
             } catch (e: Exception) {
-                ImportIntentResult.Failure(e.message ?: "导入失败")
+                ImportIntentResult.Failure(e.message ?: context.getString(R.string.import_failed))
             }
         }
         return result
@@ -57,35 +58,35 @@ object ImportIntents {
 
         intent.data?.let { uri ->
             if (uri.scheme.equals(ShareCodec.SCHEME, ignoreCase = true)) {
-                return fromShareText(uri.toString(), ImportRequest.Source.DeepLink)
+                return fromShareText(context, uri.toString(), ImportRequest.Source.DeepLink)
             }
             if (action == Intent.ACTION_VIEW) {
                 val text = readUriText(context, uri)
-                    ?: return ImportIntentResult.Failure("无法读取文件")
-                return fromShareText(text, ImportRequest.Source.File)
+                    ?: return ImportIntentResult.Failure(context.getString(R.string.import_read_failed))
+                return fromShareText(context, text, ImportRequest.Source.File)
             }
         }
 
         val sentText = intent.getStringExtra(Intent.EXTRA_TEXT)
         if (!sentText.isNullOrBlank()) {
-            return fromShareText(sentText, ImportRequest.Source.Text)
+            return fromShareText(context, sentText, ImportRequest.Source.Text)
         }
 
         @Suppress("DEPRECATION")
         val stream: Uri? = intent.getParcelableExtra(Intent.EXTRA_STREAM)
         if (stream != null) {
             val text = readUriText(context, stream)
-                ?: return ImportIntentResult.Failure("无法读取文件")
-            return fromShareText(text, ImportRequest.Source.File)
+                ?: return ImportIntentResult.Failure(context.getString(R.string.import_read_failed))
+            return fromShareText(context, text, ImportRequest.Source.File)
         }
-        return ImportIntentResult.Failure("没有可导入的配置")
+        return ImportIntentResult.Failure(context.getString(R.string.import_nothing))
     }
 
-    private fun fromShareText(raw: String, source: ImportRequest.Source): ImportIntentResult =
+    private fun fromShareText(context: Context, raw: String, source: ImportRequest.Source): ImportIntentResult =
         when (val decoded = ShareCodec.parseImportText(raw)) {
             is ShareCodec.DecodeResult.Success ->
                 ImportIntentResult.Ready(ImportRequest(decoded.toml, decoded.hasSecret, source))
-            is ShareCodec.DecodeResult.Invalid -> ImportIntentResult.Failure(decoded.reason)
+            is ShareCodec.DecodeResult.Invalid -> ImportIntentResult.Failure(ShareCodec.message(context, decoded))
         }
 
     private fun readUriText(context: Context, uri: Uri): String? {

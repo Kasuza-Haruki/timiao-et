@@ -66,6 +66,9 @@ public data class NetworkEvent(
     val type: String = "Unknown",
     /** Human-readable payload, already formatted (peer ids, URLs, address changes). */
     val detail: String = "",
+    /** Resource key for [detail] when the app should render it in the current language. */
+    val detailKey: String? = null,
+    val detailArgs: List<String> = emptyList(),
     val kind: NetworkEventKind = NetworkEventKind.Other,
     /** Original JSON line, kept for clipboard export. */
     val raw: String = "",

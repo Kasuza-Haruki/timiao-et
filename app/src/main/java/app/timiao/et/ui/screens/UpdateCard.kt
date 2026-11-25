@@ -27,12 +27,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.timiao.et.BuildConfig
+import app.timiao.et.R
 import app.timiao.et.ui.components.GlassLevel
 import app.timiao.et.ui.components.PillButton
 import app.timiao.et.ui.components.glass
@@ -111,14 +113,14 @@ internal fun UpdateCardContent(
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         UpdateRow(
-            title = "缇喵 App",
-            current = "当前 ${versionLabel(currentVersion)}",
+            title = stringResource(R.string.update_app_title),
+            current = stringResource(R.string.update_current, versionLabel(currentVersion)),
             summary = app,
         )
         Spacer(Modifier.height(10.dp))
         UpdateRow(
-            title = "EasyTier 内核",
-            current = "当前 ${versionLabel(currentKernel)}",
+            title = stringResource(R.string.update_kernel_title),
+            current = stringResource(R.string.update_current, versionLabel(currentKernel)),
             summary = kernelSummary,
         )
         Spacer(Modifier.height(10.dp))
@@ -134,13 +136,13 @@ internal fun UpdateCardContent(
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                text = if (loading) "正在获取版本信息…" else "仅检查版本，不会自动下载或替换内核",
+                text = stringResource(if (loading) R.string.update_fetching else R.string.update_check_only),
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.weight(1f),
             )
             PillButton(
-                text = if (loading) "检查中…" else "检查更新",
+                text = stringResource(if (loading) R.string.update_checking else R.string.update_check),
                 onClick = onRefresh,
                 enabled = !loading,
                 secondary = true,
@@ -201,26 +203,26 @@ private fun summaryOf(result: UpdateResult?, loading: Boolean, isKernel: Boolean
     val primary = MaterialTheme.colorScheme.primary
     return when (result) {
         null -> UpdateSummary(
-            status = if (loading) "检查中…" else "未检查",
+            status = stringResource(if (loading) R.string.update_checking else R.string.update_not_checked),
             detail = null,
             color = g.muted,
         )
         is UpdateResult.Available -> UpdateSummary(
-            status = "有新版本",
+            status = stringResource(R.string.update_available),
             detail = if (isKernel) {
-                "官方有新版本 v${result.latest}，缇喵会在适配后跟进"
+                stringResource(R.string.update_kernel_available, result.latest)
             } else {
-                "发现 v${result.latest}，可在 GitHub Releases 查看。"
+                stringResource(R.string.update_app_available, result.latest)
             },
             color = primary,
         )
         is UpdateResult.UpToDate -> UpdateSummary(
-            status = "已是最新",
+            status = stringResource(R.string.update_latest),
             detail = if (isKernel) null else null,
             color = g.good,
         )
         UpdateResult.Unknown -> UpdateSummary(
-            status = "暂无更新信息",
+            status = stringResource(R.string.update_unknown),
             detail = null,
             color = g.muted,
         )

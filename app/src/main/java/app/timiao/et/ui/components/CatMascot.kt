@@ -15,6 +15,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.stringResource
+import app.timiao.et.R
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -85,12 +87,14 @@ fun CatMascot(
     val pupil = Color(0xFF1D1822)
     val eyeBlue = Color(0xFFBFE3EF)
     val tearBlue = Color(0xFF9FD3FF)
-    val description = when (state) {
-        LinkState.Idle -> "小猫在睡觉（未连接）"
-        LinkState.Connecting -> "小猫在找节点（连接中）"
-        LinkState.Connected -> "小猫已连接"
-        LinkState.Error -> "小猫出错"
-    }
+    val description = stringResource(
+        when (state) {
+            LinkState.Idle -> R.string.cat_idle_desc
+            LinkState.Connecting -> R.string.cat_connecting_desc
+            LinkState.Connected -> R.string.cat_connected_desc
+            LinkState.Error -> R.string.cat_error_desc
+        },
+    )
 
     Canvas(
         modifier = modifier.semantics { contentDescription = description },

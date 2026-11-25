@@ -28,9 +28,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import app.timiao.et.R
 import app.timiao.et.core.PeerInfo
 import app.timiao.et.ui.components.GlassLevel
 import app.timiao.et.ui.components.PillButton
@@ -47,16 +49,16 @@ class PeerActions(private val context: Context) {
     fun copy(peer: PeerInfo, copyIp: Boolean): Boolean {
         val value = if (copyIp) peer.hostAddress() else peer.hostname.takeIf { it.isNotBlank() }
         if (value == null) {
-            toast("没有可复制的内容")
+            toast(context.getString(R.string.peer_no_copy))
             return false
         }
         val manager = context.getSystemService(ClipboardManager::class.java)
         if (manager == null) {
-            toast("剪贴板不可用")
+            toast(context.getString(R.string.label_clipboard_unavailable))
             return false
         }
-        manager.setPrimaryClip(ClipData.newPlainText(if (copyIp) "节点 IP" else "主机名", value))
-        toast("已复制 $value")
+        manager.setPrimaryClip(ClipData.newPlainText(context.getString(if (copyIp) R.string.clip_peer_ip else R.string.peer_hostname), value))
+        toast(context.getString(R.string.label_copied, value))
         return true
     }
 
@@ -66,7 +68,7 @@ class PeerActions(private val context: Context) {
     private fun open(scheme: String, peer: PeerInfo): LaunchResult {
         val host = peer.hostAddress() ?: peer.hostname.takeIf { it.isNotBlank() }
         if (host == null || !isSafeHost(host)) {
-            toast("节点地址无效")
+            toast(context.getString(R.string.peer_invalid_address))
             return LaunchResult.NoHandler
         }
         val authority = if (host.contains(':')) "[$host]" else host
@@ -76,10 +78,10 @@ class PeerActions(private val context: Context) {
             context.startActivity(intent)
             LaunchResult.Opened
         } catch (_: ActivityNotFoundException) {
-            toast("没有可处理 $scheme:// 的应用")
+            toast(context.getString(R.string.peer_open_no_app, scheme))
             LaunchResult.NoHandler
         } catch (_: SecurityException) {
-            toast("系统拒绝打开 $scheme://")
+            toast(context.getString(R.string.peer_open_denied, scheme))
             LaunchResult.NoHandler
         }
     }
@@ -88,28 +90,28 @@ class PeerActions(private val context: Context) {
     suspend fun ping(peer: PeerInfo, timeoutSec: Int = 10): PingResult = withContext(Dispatchers.IO) {
         val host = peer.hostAddress() ?: peer.hostname.takeIf { it.isNotBlank() }
         if (host == null || !isSafeHost(host)) {
-            return@withContext PingResult(false, emptyList(), "节点地址无效")
+            return@withContext PingResult(false, emptyList(), context.getString(R.string.peer_invalid_address))
         }
         val process = try {
             ProcessBuilder("/system/bin/ping", "-c", "3", "-W", "2", host)
                 .redirectErrorStream(true)
                 .start()
         } catch (e: Exception) {
-            return@withContext PingResult(false, emptyList(), e.message ?: "无法启动 ping")
+            return@withContext PingResult(false, emptyList(), e.message ?: context.getString(R.string.peer_ping_start_failed))
         }
         try {
             if (!process.waitFor(timeoutSec.toLong(), TimeUnit.SECONDS)) {
                 process.destroy()
                 process.waitFor(1, TimeUnit.SECONDS)
-                return@withContext PingResult(false, emptyList(), "ping 超时")
+                return@withContext PingResult(false, emptyList(), context.getString(R.string.peer_ping_timeout))
             }
             val output = process.inputStream.bufferedReader().use { it.readLines() }
             val replies = output.filter { it.contains("bytes from") || it.contains("time=") }
             val lines = if (replies.isNotEmpty()) replies.take(3) else output.filter { it.isNotBlank() }.take(4)
-            PingResult(process.exitValue() == 0, lines, if (lines.isEmpty()) "没有收到回复" else null)
+            PingResult(process.exitValue() == 0, lines, if (lines.isEmpty()) context.getString(R.string.peer_ping_no_reply) else null)
         } catch (e: Exception) {
             process.destroy()
-            PingResult(false, emptyList(), e.message ?: "ping 失败")
+            PingResult(false, emptyList(), e.message ?: context.getString(R.string.peer_ping_failed))
         }
     }
 
@@ -143,32 +145,32 @@ fun PeerActionsSheetContent(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "节点操作",
+            text = stringResource(R.string.peer_actions_title),
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = "${peer.hostname} · ${address ?: "无 IP"}",
+            text = stringResource(R.string.peers_subtitle_with_net, peer.hostname, address ?: stringResource(R.string.label_no_ip)),
             style = MaterialTheme.typography.labelMedium,
             color = g.muted,
         )
         Spacer(Modifier.height(2.dp))
 
-        ActionRow("复制 IP", enabled = address != null) {
+        ActionRow(stringResource(R.string.peer_copy_ip), enabled = address != null) {
             actions.copy(peer, copyIp = true)
             onDone()
         }
-        ActionRow("复制主机名", enabled = peer.hostname.isNotBlank()) {
+        ActionRow(stringResource(R.string.peer_copy_hostname), enabled = peer.hostname.isNotBlank()) {
             actions.copy(peer, copyIp = false)
             onDone()
         }
-        ActionRow("用 SSH 打开") {
+        ActionRow(stringResource(R.string.peer_open_ssh)) {
             if (actions.openSsh(peer) == LaunchResult.Opened) onDone()
         }
-        ActionRow("用远程桌面打开") {
+        ActionRow(stringResource(R.string.peer_open_rdp)) {
             if (actions.openRdp(peer) == LaunchResult.Opened) onDone()
         }
-        ActionRow("Ping 三次", enabled = !running) {
+        ActionRow(stringResource(R.string.peer_ping_three), enabled = !running) {
             running = true
             ping = null
             scope.launch {
@@ -178,7 +180,7 @@ fun PeerActionsSheetContent(
         }
 
         when {
-            running -> Text("正在 ping…", style = MaterialTheme.typography.bodySmall, color = g.muted)
+            running -> Text(stringResource(R.string.peer_pinging), style = MaterialTheme.typography.bodySmall, color = g.muted)
             ping != null -> {
                 val result = ping
                 if (result != null) {
@@ -189,7 +191,7 @@ fun PeerActionsSheetContent(
                             .padding(12.dp),
                     ) {
                         Text(
-                            text = if (result.ok) "ping 成功" else "ping 失败",
+                            text = stringResource(if (result.ok) R.string.peer_ping_ok else R.string.peer_ping_fail),
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                             color = if (result.ok) g.good else MaterialTheme.colorScheme.error,
                         )
@@ -209,7 +211,7 @@ fun PeerActionsSheetContent(
         }
 
         Spacer(Modifier.height(4.dp))
-        PillButton("关闭", onClick = onDone, modifier = Modifier.fillMaxWidth(), secondary = true)
+        PillButton(stringResource(R.string.action_close), onClick = onDone, modifier = Modifier.fillMaxWidth(), secondary = true)
     }
 }
 

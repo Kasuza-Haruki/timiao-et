@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,9 +66,12 @@ import app.timiao.et.core.NetworkConfig
 import app.timiao.et.core.diag.DeviceProbe
 import app.timiao.et.core.diag.DiagItem
 import app.timiao.et.core.diag.DiagSeverity
+import app.timiao.et.core.diag.DiagStrings
 import app.timiao.et.core.diag.DiagnosticInput
 import app.timiao.et.core.diag.DiagnosticReport
+import app.timiao.et.core.diag.ChineseDiagStrings
 import app.timiao.et.core.diag.DiagnosticsEngine
+import app.timiao.et.R
 import app.timiao.et.ui.AppViewModel
 import app.timiao.et.ui.components.GlassBackdrop
 import app.timiao.et.ui.components.GlassLevel
@@ -161,7 +165,8 @@ fun DiagnosticsScreen(
     val status by vm.activeStatus.collectAsStateWithLifecycle()
     var report by remember { mutableStateOf<DiagnosticReport?>(null) }
     var running by remember { mutableStateOf(false) }
-    val engine = remember { DiagnosticsEngine() }
+    val diagStrings = remember(context) { AndroidDiagStrings(context) }
+    val engine = remember(diagStrings) { DiagnosticsEngine(strings = diagStrings) }
     val deviceProbe = remember(context) { AndroidDeviceProbe(context) }
 
     val runDiagnostics: () -> Unit = {
@@ -199,6 +204,7 @@ internal fun DiagnosticsContent(
     updateSection: @Composable () -> Unit = { UpdateCard() },
 ) {
     val context = LocalContext.current
+    val diagStrings = remember(context) { AndroidDiagStrings(context) }
     var expanded by remember { mutableStateOf(emptySet<String>()) }
 
     LazyColumn(
@@ -208,10 +214,10 @@ internal fun DiagnosticsContent(
     ) {
         item {
             ScreenHeader(
-                title = "诊断",
-                subtitle = "为什么连不上 / 为什么慢",
+                title = stringResource(R.string.diag_title),
+                subtitle = stringResource(R.string.diag_subtitle),
                 onBack = onBack,
-                action = { OrbButton(Icons.Filled.Refresh, "重新诊断", onRun) },
+                action = { OrbButton(Icons.Filled.Refresh, stringResource(R.string.diag_rerun), onRun) },
             )
         }
         item {
@@ -219,7 +225,8 @@ internal fun DiagnosticsContent(
                 report = report,
                 running = running,
                 onRun = onRun,
-                onCopy = { copyReport(context, report) },
+                onCopy = { copyReport(context, report, diagStrings) },
+                strings = diagStrings,
             )
         }
         if (report != null) {
@@ -234,7 +241,7 @@ internal fun DiagnosticsContent(
             }
         }
         item { Spacer(Modifier.height(2.dp)) }
-        item { SectionLabel("更新") }
+        item { SectionLabel(stringResource(R.string.diag_update_section)) }
         item { updateSection() }
     }
 }
@@ -245,6 +252,7 @@ private fun OverallCard(
     running: Boolean,
     onRun: () -> Unit,
     onCopy: () -> Unit,
+    strings: DiagStrings,
 ) {
     val g = LocalGlassColors.current
     Column(
@@ -264,12 +272,12 @@ private fun OverallCard(
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Text(
-                            "正在诊断…",
+                            stringResource(R.string.diag_running_title),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Text(
-                            "检查配置、服务器、运行状态和权限",
+                            stringResource(R.string.diag_running_sub),
                             style = MaterialTheme.typography.bodySmall,
                             color = g.muted,
                         )
@@ -284,51 +292,51 @@ private fun OverallCard(
                     alpha = 0.92f,
                 )
                 Text(
-                    "还没有诊断结果",
+                    stringResource(R.string.diag_empty_title),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    "一次检查配置、服务器、运行状态和权限，并给出可操作的修复建议。",
+                    stringResource(R.string.diag_empty_text),
                     style = MaterialTheme.typography.bodySmall,
                     color = g.muted,
                     modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
                 )
-                PillButton("开始诊断", onRun)
+                PillButton(stringResource(R.string.diag_start), onRun)
             }
             else -> {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = severityIcon(report.overall),
-                        contentDescription = report.overall.label,
+                        contentDescription = severityLabel(report.overall),
                         modifier = Modifier.size(30.dp),
                         tint = severityColor(report.overall),
                     )
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            report.headline,
+                            report.headline(strings),
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            "共 ${report.items.size} 项 · 警告 ${report.warnCount} · 失败 ${report.failCount}",
+                            stringResource(R.string.diag_counts, report.items.size, report.warnCount, report.failCount),
                             style = MaterialTheme.typography.labelSmall,
                             color = g.muted,
                         )
                     }
                 }
                 Text(
-                    "生成于 ${reportTime(report.generatedAtEpochMs)}",
+                    stringResource(R.string.diag_generated, reportTime(report.generatedAtEpochMs)),
                     style = MaterialTheme.typography.labelSmall,
                     color = g.muted,
                     modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PillButton("重新诊断", onRun, Modifier.weight(1f))
-                    PillButton("复制报告", onCopy, Modifier.weight(1f), secondary = true)
+                    PillButton(stringResource(R.string.diag_rerun), onRun, Modifier.weight(1f))
+                    PillButton(stringResource(R.string.diag_copy_report), onCopy, Modifier.weight(1f), secondary = true)
                 }
             }
         }
@@ -360,7 +368,7 @@ private fun DiagItemCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 imageVector = severityIcon(item.severity),
-                contentDescription = item.severity.label,
+                contentDescription = severityLabel(item.severity),
                 modifier = Modifier.size(20.dp),
                 tint = color,
             )
@@ -384,7 +392,7 @@ private fun DiagItemCard(
             Spacer(Modifier.width(4.dp))
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowDown,
-                contentDescription = if (expanded) "收起" else "展开",
+                contentDescription = stringResource(if (expanded) R.string.action_collapse else R.string.action_expand),
                 modifier = Modifier
                     .size(18.dp)
                     .rotate(rotation),
@@ -395,7 +403,7 @@ private fun DiagItemCard(
             item.advice?.takeIf { it.isNotBlank() }?.let { advice ->
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "建议：$advice",
+                    text = stringResource(R.string.diag_advice, advice),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
@@ -408,7 +416,7 @@ private fun DiagItemCard(
                 Spacer(Modifier.height(8.dp))
                 item.details.forEach { line ->
                     Text(
-                        text = "· $line",
+                        text = stringResource(R.string.diag_detail_bullet, line),
                         style = MaterialTheme.typography.labelSmall,
                         color = g.muted,
                         fontFamily = FontFamily.Monospace,
@@ -436,12 +444,36 @@ private fun severityIcon(severity: DiagSeverity): ImageVector = when (severity) 
 private fun reportTime(epochMs: Long): String =
     SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(Date(epochMs))
 
-private fun copyReport(context: Context, report: DiagnosticReport?) {
+private fun copyReport(context: Context, report: DiagnosticReport?, strings: DiagStrings) {
     if (report == null) return
     val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
-    clipboard.setPrimaryClip(ClipData.newPlainText("缇喵诊断报告", report.plainText()))
-    Toast.makeText(context, "已复制诊断报告", Toast.LENGTH_SHORT).show()
+    clipboard.setPrimaryClip(
+        ClipData.newPlainText(context.getString(R.string.diag_clipboard_label), report.plainText(strings)),
+    )
+    Toast.makeText(context, context.getString(R.string.diag_copied), Toast.LENGTH_SHORT).show()
 }
+
+/** Resolves a diagnostic text key through this app's string resources. */
+internal class AndroidDiagStrings(private val context: Context) : DiagStrings {
+    override fun get(key: String, vararg args: Any?): String {
+        val id = context.resources.getIdentifier(key, "string", context.packageName)
+        if (id == 0) return key
+        return if (args.isEmpty()) {
+            context.getString(id)
+        } else {
+            context.getString(id, *args.map { it ?: "" }.toTypedArray())
+        }
+    }
+}
+
+@Composable
+private fun severityLabel(severity: DiagSeverity): String = stringResource(
+    when (severity) {
+        DiagSeverity.Pass -> R.string.diag_sev_pass
+        DiagSeverity.Warn -> R.string.diag_sev_warn
+        DiagSeverity.Fail -> R.string.diag_sev_fail
+    },
+)
 
 @Preview(showBackground = true, widthDp = 390, heightDp = 1600)
 @Preview(
@@ -483,33 +515,33 @@ private fun sampleReport(): DiagnosticReport = DiagnosticReport(
     items = listOf(
         DiagItem(
             id = "config_servers",
-            title = "服务器地址",
+            title = ChineseDiagStrings.get("diag_servers_title"),
             severity = DiagSeverity.Pass,
-            summary = "已配置 1 个服务器地址",
-            details = listOf("tcp://203.0.113.9:11010（TCP）"),
+            summary = ChineseDiagStrings.get("diag_servers_configured_summary", 1),
+            details = listOf("tcp://203.0.113.9:11010 (TCP)"),
         ),
         DiagItem(
             id = "reachability",
-            title = "服务器可达性",
+            title = ChineseDiagStrings.get("diag_reach_title"),
             severity = DiagSeverity.Warn,
-            summary = "1 个服务器不可达",
-            advice = "确认服务器上的 EasyTier 正在运行并监听该端口；云服务器安全组、防火墙、路由器端口转发都要放行。",
-            details = listOf("tcp://203.0.113.9:11010 — 连接超时（3 秒），服务器不可达或被防火墙丢弃"),
+            summary = ChineseDiagStrings.get("diag_reach_partial_summary", 0, 1),
+            advice = ChineseDiagStrings.get("diag_reach_unreachable_advice"),
+            details = listOf("tcp://203.0.113.9:11010 — timeout"),
         ),
         DiagItem(
             id = "status_path",
-            title = "连接方式",
+            title = ChineseDiagStrings.get("diag_path_title"),
             severity = DiagSeverity.Fail,
-            summary = "2 个节点全部走中继，没有直连",
-            advice = "检测到对称 NAT，UDP 打洞通常失败。可在编辑页开启 KCP 或 QUIC 代理，让流量更稳定。",
-            details = listOf("本机 NAT：Symmetric", "laptop 经中继（relay(2)，tcp）"),
+            summary = ChineseDiagStrings.get("diag_path_all_relay_summary", 2),
+            advice = ChineseDiagStrings.get("diag_path_symmetric_advice"),
+            details = listOf("NAT: Symmetric", "laptop relay(2), tcp"),
         ),
         DiagItem(
             id = "device_battery",
-            title = "省电限制",
+            title = ChineseDiagStrings.get("diag_device_battery_title"),
             severity = DiagSeverity.Warn,
-            summary = "系统正在限制缇喵的后台运行",
-            advice = "系统设置 > 电池 > 不受限制，允许缇喵后台常驻，否则锁屏后 VPN 可能被断开。",
+            summary = ChineseDiagStrings.get("diag_device_battery_fail"),
+            advice = ChineseDiagStrings.get("diag_device_battery_advice"),
         ),
     ),
     generatedAtEpochMs = 1_764_000_000_000,

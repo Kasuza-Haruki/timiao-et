@@ -374,45 +374,89 @@ internal object StatusParser {
             type in connectEvents -> NetworkEventKind.Connect
             else -> NetworkEventKind.Other
         }
+        val detail = eventDetail(type, value)
         return NetworkEvent(
             timeMs = parseTime(time),
             type = type,
-            detail = eventDetail(type, value),
+            detail = detail.text,
+            detailKey = detail.key,
+            detailArgs = detail.args,
             kind = kind,
             raw = text,
         )
     }
 
-    private fun eventDetail(type: String, value: JsonElement): String = when (type) {
-        "PeerAdded", "PeerRemoved" -> "对端 ${value.text()}"
+    private data class EventDetail(
+        val text: String,
+        val key: String? = null,
+        val args: List<String> = emptyList(),
+    )
+
+    private fun eventDetail(type: String, value: JsonElement): EventDetail = when (type) {
+        "PeerAdded", "PeerRemoved" -> EventDetail(
+            "对端 ${value.text()}",
+            "event_detail_peer",
+            listOf(value.textNeutral()),
+        )
         "PeerConnAdded", "PeerConnRemoved" -> {
             val obj = value as? JsonObject
             val tunnel = obj?.get("tunnel") as? JsonObject
             val remote = ((tunnel?.get("remote_addr") as? JsonObject)?.str("url")).orEmpty()
             val proto = tunnel?.str("tunnel_type").orEmpty()
-            listOfNotNull(
-                obj?.long("peer_id")?.let { "对端 $it" },
+            val peer = obj?.long("peer_id")?.let { "对端 $it" }
+            val args = listOfNotNull(
+                obj?.long("peer_id")?.toString(),
                 proto.ifBlank { null },
                 remote.ifBlank { null },
-            ).joinToString(" · ")
+            )
+            val key = when (args.size) {
+                3 -> "event_detail_peer_conn_full"
+                2 -> "event_detail_peer_conn_no_remote"
+                else -> "event_detail_peer_conn_peer"
+            }
+            EventDetail(
+                listOfNotNull(peer, proto.ifBlank { null }, remote.ifBlank { null }).joinToString(" · "),
+                key,
+                args,
+            )
         }
         "DhcpIpv4Changed", "DhcpIpv6Changed" -> {
             val arr = value as? JsonArray
-            "${arr?.getOrNull(0).text()} → ${arr?.getOrNull(1).text()}"
+            EventDetail(
+                "${arr?.getOrNull(0).text()} → ${arr?.getOrNull(1).text()}",
+                "event_detail_arrow",
+                listOf(arr?.getOrNull(0).textNeutral(), arr?.getOrNull(1).textNeutral()),
+            )
         }
-        "DhcpIpv4Conflicted", "DhcpIpv6Conflicted" -> "冲突地址 ${value.text()}"
+        "DhcpIpv4Conflicted", "DhcpIpv6Conflicted" -> EventDetail(
+            "冲突地址 ${value.text()}",
+            "event_detail_conflict",
+            listOf(value.textNeutral()),
+        )
         "ProxyCidrsUpdated" -> {
             val arr = value as? JsonArray
-            "新增 ${arr?.getOrNull(0).text()} · 移除 ${arr?.getOrNull(1).text()}"
+            EventDetail(
+                "新增 ${arr?.getOrNull(0).text()} · 移除 ${arr?.getOrNull(1).text()}",
+                "event_detail_proxy_update",
+                listOf(arr?.getOrNull(0).textNeutral(), arr?.getOrNull(1).textNeutral()),
+            )
         }
         "UdpBroadcastRelayStartResult" -> {
             val obj = value as? JsonObject
             val backend = obj?.str("capture_backend")
             val error = obj?.str("error")
             when {
-                error != null -> "失败：$error"
-                backend != null -> "后端：$backend"
-                else -> value.text()
+                error != null -> EventDetail(
+                    "失败：$error",
+                    "event_detail_failed",
+                    listOf(error),
+                )
+                backend != null -> EventDetail(
+                    "后端：$backend",
+                    "event_detail_backend",
+                    listOf(backend),
+                )
+                else -> EventDetail(value.text())
             }
         }
         "PortForwardAdded" -> {
@@ -421,12 +465,24 @@ internal object StatusParser {
             val dst = obj?.str("dst_addr")
             val proto = obj?.str("proto")
             if (bind != null && dst != null) {
-                "${proto.orEmpty()} $bind → $dst".trim()
+                EventDetail(
+                    "${proto.orEmpty()} $bind → $dst".trim(),
+                    "event_detail_port_forward",
+                    listOf(proto.orEmpty(), bind, dst),
+                )
             } else {
-                value.text()
+                EventDetail(value.text())
             }
         }
-        else -> value.text()
+        else -> EventDetail(value.text())
+    }
+
+    /** Neutral fallback for values used as resource arguments. */
+    private fun JsonElement?.textNeutral(): String = when (val element = this) {
+        null, is JsonNull -> "—"
+        is JsonPrimitive -> element.contentOrNull ?: "—"
+        is JsonArray -> element.joinToString(" · ") { it.textNeutral() }
+        is JsonObject -> element.toString()
     }
 
     private fun JsonElement?.text(): String = when (val element = this) {

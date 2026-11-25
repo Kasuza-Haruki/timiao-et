@@ -1,30 +1,32 @@
 package app.timiao.et.ui.util
 
+import app.timiao.et.R
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class FormattersTest {
 
     @Test
-    fun mapsEveryNatTypeToChinese() {
+    fun mapsEveryNatTypeToAResource() {
         val expected = mapOf(
-            "Unknown" to "未知",
-            "OpenInternet" to "开放互联网",
-            "NoPAT" to "无 PAT",
-            "FullCone" to "全锥形",
-            "Restricted" to "受限锥形",
-            "PortRestricted" to "端口受限锥形",
-            "Symmetric" to "对称 NAT",
-            "SymUdpFirewall" to "对称 UDP 防火墙",
-            "SymmetricEasyInc" to "对称 NAT · 易增",
-            "SymmetricEasyDec" to "对称 NAT · 易减",
+            "Unknown" to R.string.nat_unknown,
+            "OpenInternet" to R.string.nat_open,
+            "NoPAT" to R.string.nat_nopat,
+            "FullCone" to R.string.nat_fullcone,
+            "Restricted" to R.string.nat_restricted,
+            "PortRestricted" to R.string.nat_portrestricted,
+            "Symmetric" to R.string.nat_symmetric,
+            "SymUdpFirewall" to R.string.nat_symudpfirewall,
+            "SymmetricEasyInc" to R.string.nat_syminc,
+            "SymmetricEasyDec" to R.string.nat_symdec,
         )
         for ((raw, label) in expected) {
-            assertEquals(raw, label, natLabel(raw))
-            assertEquals("$raw (lowercase)", label, natLabel(raw.lowercase()))
+            assertEquals(raw, label, natLabelRes(raw))
+            assertEquals("$raw (lowercase)", label, natLabelRes(raw.lowercase()))
         }
-        assertEquals("—", natLabel(null))
-        assertEquals("—", natLabel(""))
+        assertNull(natLabelRes(null))
+        assertNull(natLabelRes(""))
     }
 
     @Test
@@ -38,8 +40,8 @@ class FormattersTest {
 
     @Test
     fun labelsKnownEventTypes() {
-        assertEquals("对端连接添加", eventTypeLabel("PeerConnAdded"))
-        assertEquals("连接错误", eventTypeLabel("ConnectError"))
-        assertEquals("自定义事件", eventTypeLabel("自定义事件"))
+        assertEquals(R.string.event_peer_conn_added, eventTypeLabelRes("PeerConnAdded"))
+        assertEquals(R.string.event_connect_error, eventTypeLabelRes("ConnectError"))
+        assertNull(eventTypeLabelRes("custom event"))
     }
 }

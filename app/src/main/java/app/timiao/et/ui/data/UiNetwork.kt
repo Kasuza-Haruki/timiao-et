@@ -1,5 +1,8 @@
 package app.timiao.et.ui.data
 
+import androidx.annotation.StringRes
+import app.timiao.et.R
+
 import app.timiao.et.core.Flags
 import app.timiao.et.core.NetworkConfig
 import app.timiao.et.core.PeerConfig
@@ -156,53 +159,57 @@ fun UiNetwork.toConfig(base: NetworkConfig? = null): NetworkConfig {
 
 class BoolFlagSpec(
     val key: String,
-    val label: String,
-    val hint: String,
-    val group: String,
+    @StringRes val labelRes: Int,
+    @StringRes val hintRes: Int,
+    val groupKey: String,
     val default: Boolean = false,
     val get: (Flags) -> Boolean,
     val set: (Flags, Boolean) -> Flags,
 )
 
+@StringRes
+fun flagGroupTitleRes(groupKey: String): Int = when (groupKey) {
+    "connection" -> R.string.flag_group_connection
+    "p2p" -> R.string.flag_group_p2p
+    else -> R.string.flag_group_proxy
+}
+
 /** The 30 boolean flags the official GUI offers, plus IPv6 auto handled separately. */
 val BoolFlags: List<BoolFlagSpec> = listOf(
-    // 连接
-    BoolFlagSpec("multi_thread", "启用多线程", "使用多线程运行时", "连接", true, { it.multiThread }, { f, v -> f.copy(multiThread = v) }),
-    BoolFlagSpec("bind_device", "仅使用物理网卡", "避免通过其他虚拟网建立连接", "连接", true, { it.bindDevice }, { f, v -> f.copy(bindDevice = v) }),
-    BoolFlagSpec("no_tun", "无 TUN 模式", "不创建 TUN，适合无权限时使用", "连接", false, { it.noTun }, { f, v -> f.copy(noTun = v) }),
-    BoolFlagSpec("latency_first", "延迟优先", "忽略中转跳数，选择总延迟最低的路径", "连接", false, { it.latencyFirst }, { f, v -> f.copy(latencyFirst = v) }),
-    BoolFlagSpec("use_smoltcp", "用户态协议栈", "使用 smoltcp，避免系统防火墙影响代理", "连接", false, { it.useSmoltcp }, { f, v -> f.copy(useSmoltcp = v) }),
-    BoolFlagSpec("enable_encryption", "启用加密", "对等节点之间加密传输，需与对端一致", "连接", true, { it.enableEncryption }, { f, v -> f.copy(enableEncryption = v) }),
-    BoolFlagSpec("enable_ipv6", "启用 IPv6", "允许 IPv6 通信，关闭后仅使用 IPv4", "连接", true, { it.enableIpv6 }, { f, v -> f.copy(enableIpv6 = v) }),
-    BoolFlagSpec("accept_dns", "启用魔法 DNS", "可通过 node.et.net 访问其他节点", "连接", false, { it.acceptDns }, { f, v -> f.copy(acceptDns = v) }),
-    BoolFlagSpec("private_mode", "私有模式", "拒绝网络名或密钥不同的节点", "连接", false, { it.privateMode }, { f, v -> f.copy(privateMode = v) }),
-    BoolFlagSpec("disable_upnp", "禁用 UPnP", "不自动映射监听端口", "连接", false, { it.disableUpnp }, { f, v -> f.copy(disableUpnp = v) }),
-    // P2P 与打洞
-    BoolFlagSpec("disable_p2p", "禁用 P2P", "只通过中转通信", "P2P 与打洞", false, { it.disableP2p }, { f, v -> f.copy(disableP2p = v) }),
-    BoolFlagSpec("p2p_only", "仅 P2P", "只与已建立 P2P 的节点通信", "P2P 与打洞", false, { it.p2pOnly }, { f, v -> f.copy(p2pOnly = v) }),
-    BoolFlagSpec("lazy_p2p", "延迟 P2P", "有实际流量时才建立 P2P", "P2P 与打洞", false, { it.lazyP2p }, { f, v -> f.copy(lazyP2p = v) }),
-    BoolFlagSpec("need_p2p", "需要 P2P", "要求对端主动建立 P2P", "P2P 与打洞", false, { it.needP2p }, { f, v -> f.copy(needP2p = v) }),
-    BoolFlagSpec("disable_udp_hole_punching", "禁用 UDP 打洞", "不尝试 UDP 直连", "P2P 与打洞", false, { it.disableUdpHolePunching }, { f, v -> f.copy(disableUdpHolePunching = v) }),
-    BoolFlagSpec("disable_tcp_hole_punching", "禁用 TCP 打洞", "不尝试 TCP 直连", "P2P 与打洞", false, { it.disableTcpHolePunching }, { f, v -> f.copy(disableTcpHolePunching = v) }),
-    BoolFlagSpec("disable_sym_hole_punching", "禁用对称 NAT 打洞", "将对称 NAT 当作锥形 NAT 处理", "P2P 与打洞", false, { it.disableSymHolePunching }, { f, v -> f.copy(disableSymHolePunching = v) }),
-    // 代理与转发
-    BoolFlagSpec("enable_kcp_proxy", "KCP 代理", "将 TCP 流量转为 KCP", "代理与转发", false, { it.enableKcpProxy }, { f, v -> f.copy(enableKcpProxy = v) }),
-    BoolFlagSpec("disable_kcp_input", "禁用 KCP 输入", "不接受 KCP 入站流量", "代理与转发", false, { it.disableKcpInput }, { f, v -> f.copy(disableKcpInput = v) }),
-    BoolFlagSpec("enable_quic_proxy", "QUIC 代理", "将 TCP 流量转为 QUIC", "代理与转发", false, { it.enableQuicProxy }, { f, v -> f.copy(enableQuicProxy = v) }),
-    BoolFlagSpec("disable_quic_input", "禁用 QUIC 输入", "不接受 QUIC 入站流量", "代理与转发", false, { it.disableQuicInput }, { f, v -> f.copy(disableQuicInput = v) }),
-    BoolFlagSpec("enable_exit_node", "启用出口节点", "允许本节点成为出口节点", "代理与转发", false, { it.enableExitNode }, { f, v -> f.copy(enableExitNode = v) }),
-    BoolFlagSpec("proxy_forward_by_system", "系统转发", "用内核转发子网代理流量", "代理与转发", false, { it.proxyForwardBySystem }, { f, v -> f.copy(proxyForwardBySystem = v) }),
-    BoolFlagSpec("relay_all_peer_rpc", "转发 RPC 包", "转发白名单外节点的 RPC", "代理与转发", false, { it.relayAllPeerRpc }, { f, v -> f.copy(relayAllPeerRpc = v) }),
-    BoolFlagSpec("disable_relay_data", "不转发数据", "不承载其他节点的流量", "代理与转发", false, { it.disableRelayData }, { f, v -> f.copy(disableRelayData = v) }),
-    BoolFlagSpec("prefer_peer_relay", "优先凭证节点转发", "优先使用已转发到目标的凭证节点", "代理与转发", false, { it.preferPeerRelay }, { f, v -> f.copy(preferPeerRelay = v) }),
-    BoolFlagSpec("enable_udp_broadcast_relay", "UDP 广播中继", "仅 Windows，转发局域网广播", "代理与转发", false, { it.enableUdpBroadcastRelay }, { f, v -> f.copy(enableUdpBroadcastRelay = v) }),
-    BoolFlagSpec("enable_udp_fec", "UDP FEC", "启用前向纠错", "代理与转发", false, { it.enableUdpFec }, { f, v -> f.copy(enableUdpFec = v) }),
-    BoolFlagSpec("enable_udp_fec_kcp", "KCP FEC", "KCP 链路上启用前向纠错", "代理与转发", false, { it.enableUdpFecKcp }, { f, v -> f.copy(enableUdpFecKcp = v) }),
-    BoolFlagSpec("enable_udp_fec_quic", "QUIC FEC", "QUIC 链路上启用前向纠错", "代理与转发", false, { it.enableUdpFecQuic }, { f, v -> f.copy(enableUdpFecQuic = v) }),
+    BoolFlagSpec("multi_thread", R.string.flag_multi_thread_label, R.string.flag_multi_thread_hint, "connection", true, { it.multiThread }, { f, v -> f.copy(multiThread = v) }),
+    BoolFlagSpec("bind_device", R.string.flag_bind_device_label, R.string.flag_bind_device_hint, "connection", true, { it.bindDevice }, { f, v -> f.copy(bindDevice = v) }),
+    BoolFlagSpec("no_tun", R.string.flag_no_tun_label, R.string.flag_no_tun_hint, "connection", false, { it.noTun }, { f, v -> f.copy(noTun = v) }),
+    BoolFlagSpec("latency_first", R.string.flag_latency_first_label, R.string.flag_latency_first_hint, "connection", false, { it.latencyFirst }, { f, v -> f.copy(latencyFirst = v) }),
+    BoolFlagSpec("use_smoltcp", R.string.flag_use_smoltcp_label, R.string.flag_use_smoltcp_hint, "connection", false, { it.useSmoltcp }, { f, v -> f.copy(useSmoltcp = v) }),
+    BoolFlagSpec("enable_encryption", R.string.flag_enable_encryption_label, R.string.flag_enable_encryption_hint, "connection", true, { it.enableEncryption }, { f, v -> f.copy(enableEncryption = v) }),
+    BoolFlagSpec("enable_ipv6", R.string.flag_enable_ipv6_label, R.string.flag_enable_ipv6_hint, "connection", true, { it.enableIpv6 }, { f, v -> f.copy(enableIpv6 = v) }),
+    BoolFlagSpec("accept_dns", R.string.flag_accept_dns_label, R.string.flag_accept_dns_hint, "connection", false, { it.acceptDns }, { f, v -> f.copy(acceptDns = v) }),
+    BoolFlagSpec("private_mode", R.string.flag_private_mode_label, R.string.flag_private_mode_hint, "connection", false, { it.privateMode }, { f, v -> f.copy(privateMode = v) }),
+    BoolFlagSpec("disable_upnp", R.string.flag_disable_upnp_label, R.string.flag_disable_upnp_hint, "connection", false, { it.disableUpnp }, { f, v -> f.copy(disableUpnp = v) }),
+    BoolFlagSpec("disable_p2p", R.string.flag_disable_p2p_label, R.string.flag_disable_p2p_hint, "p2p", false, { it.disableP2p }, { f, v -> f.copy(disableP2p = v) }),
+    BoolFlagSpec("p2p_only", R.string.flag_p2p_only_label, R.string.flag_p2p_only_hint, "p2p", false, { it.p2pOnly }, { f, v -> f.copy(p2pOnly = v) }),
+    BoolFlagSpec("lazy_p2p", R.string.flag_lazy_p2p_label, R.string.flag_lazy_p2p_hint, "p2p", false, { it.lazyP2p }, { f, v -> f.copy(lazyP2p = v) }),
+    BoolFlagSpec("need_p2p", R.string.flag_need_p2p_label, R.string.flag_need_p2p_hint, "p2p", false, { it.needP2p }, { f, v -> f.copy(needP2p = v) }),
+    BoolFlagSpec("disable_udp_hole_punching", R.string.flag_disable_udp_hole_punching_label, R.string.flag_disable_udp_hole_punching_hint, "p2p", false, { it.disableUdpHolePunching }, { f, v -> f.copy(disableUdpHolePunching = v) }),
+    BoolFlagSpec("disable_tcp_hole_punching", R.string.flag_disable_tcp_hole_punching_label, R.string.flag_disable_tcp_hole_punching_hint, "p2p", false, { it.disableTcpHolePunching }, { f, v -> f.copy(disableTcpHolePunching = v) }),
+    BoolFlagSpec("disable_sym_hole_punching", R.string.flag_disable_sym_hole_punching_label, R.string.flag_disable_sym_hole_punching_hint, "p2p", false, { it.disableSymHolePunching }, { f, v -> f.copy(disableSymHolePunching = v) }),
+    BoolFlagSpec("enable_kcp_proxy", R.string.flag_enable_kcp_proxy_label, R.string.flag_enable_kcp_proxy_hint, "proxy", false, { it.enableKcpProxy }, { f, v -> f.copy(enableKcpProxy = v) }),
+    BoolFlagSpec("disable_kcp_input", R.string.flag_disable_kcp_input_label, R.string.flag_disable_kcp_input_hint, "proxy", false, { it.disableKcpInput }, { f, v -> f.copy(disableKcpInput = v) }),
+    BoolFlagSpec("enable_quic_proxy", R.string.flag_enable_quic_proxy_label, R.string.flag_enable_quic_proxy_hint, "proxy", false, { it.enableQuicProxy }, { f, v -> f.copy(enableQuicProxy = v) }),
+    BoolFlagSpec("disable_quic_input", R.string.flag_disable_quic_input_label, R.string.flag_disable_quic_input_hint, "proxy", false, { it.disableQuicInput }, { f, v -> f.copy(disableQuicInput = v) }),
+    BoolFlagSpec("enable_exit_node", R.string.flag_enable_exit_node_label, R.string.flag_enable_exit_node_hint, "proxy", false, { it.enableExitNode }, { f, v -> f.copy(enableExitNode = v) }),
+    BoolFlagSpec("proxy_forward_by_system", R.string.flag_proxy_forward_by_system_label, R.string.flag_proxy_forward_by_system_hint, "proxy", false, { it.proxyForwardBySystem }, { f, v -> f.copy(proxyForwardBySystem = v) }),
+    BoolFlagSpec("relay_all_peer_rpc", R.string.flag_relay_all_peer_rpc_label, R.string.flag_relay_all_peer_rpc_hint, "proxy", false, { it.relayAllPeerRpc }, { f, v -> f.copy(relayAllPeerRpc = v) }),
+    BoolFlagSpec("disable_relay_data", R.string.flag_disable_relay_data_label, R.string.flag_disable_relay_data_hint, "proxy", false, { it.disableRelayData }, { f, v -> f.copy(disableRelayData = v) }),
+    BoolFlagSpec("prefer_peer_relay", R.string.flag_prefer_peer_relay_label, R.string.flag_prefer_peer_relay_hint, "proxy", false, { it.preferPeerRelay }, { f, v -> f.copy(preferPeerRelay = v) }),
+    BoolFlagSpec("enable_udp_broadcast_relay", R.string.flag_enable_udp_broadcast_relay_label, R.string.flag_enable_udp_broadcast_relay_hint, "proxy", false, { it.enableUdpBroadcastRelay }, { f, v -> f.copy(enableUdpBroadcastRelay = v) }),
+    BoolFlagSpec("enable_udp_fec", R.string.flag_enable_udp_fec_label, R.string.flag_enable_udp_fec_hint, "proxy", false, { it.enableUdpFec }, { f, v -> f.copy(enableUdpFec = v) }),
+    BoolFlagSpec("enable_udp_fec_kcp", R.string.flag_enable_udp_fec_kcp_label, R.string.flag_enable_udp_fec_kcp_hint, "proxy", false, { it.enableUdpFecKcp }, { f, v -> f.copy(enableUdpFecKcp = v) }),
+    BoolFlagSpec("enable_udp_fec_quic", R.string.flag_enable_udp_fec_quic_label, R.string.flag_enable_udp_fec_quic_hint, "proxy", false, { it.enableUdpFecQuic }, { f, v -> f.copy(enableUdpFecQuic = v) }),
 )
 
 val FlagGroups: List<Pair<String, List<BoolFlagSpec>>> =
-    BoolFlags.groupBy { it.group }.map { (group, flags) -> group to flags }
+    BoolFlags.groupBy { it.groupKey }.map { (group, flags) -> group to flags }
 
 val DefaultProtocols = listOf("tcp", "udp", "wg", "ws", "wss", "quic", "faketcp")
 val CompressionAlgos = listOf("None", "Zstd", "Lzo")
@@ -233,12 +240,13 @@ fun PortForwardDraft.toPortForward(): PortForward =
         proto = proto,
     )
 
-/** Returns a user-facing error, or null when the row is complete and valid. */
-fun PortForwardDraft.error(): String? = when {
-    proto != "tcp" && proto != "udp" -> "协议只能是 tcp 或 udp"
-    bindIp.isBlank() || dstIp.isBlank() -> "地址不能为空"
-    !isValidHost(bindIp) || !isValidHost(dstIp) -> "地址格式不正确"
-    !isValidPort(bindPort) || !isValidPort(dstPort) -> "端口应为 1-65535"
+/** Returns a user-facing error resource, or null when the row is complete and valid. */
+@StringRes
+fun PortForwardDraft.error(): Int? = when {
+    proto != "tcp" && proto != "udp" -> R.string.edit_err_protocol_tcp_udp
+    bindIp.isBlank() || dstIp.isBlank() -> R.string.edit_err_addr_required
+    !isValidHost(bindIp) || !isValidHost(dstIp) -> R.string.edit_err_addr_format
+    !isValidPort(bindPort) || !isValidPort(dstPort) -> R.string.edit_err_port_range
     else -> null
 }
 
@@ -464,7 +472,7 @@ object WireGuardKeys {
             appendLine("[Peer]")
             appendLine("PublicKey = $serverPublic")
             appendLine("AllowedIPs = $allowedText")
-            appendLine("Endpoint = $listen # 占位：0.0.0.0 请替换为公网地址")
+            appendLine("Endpoint = $listen # placeholder: replace 0.0.0.0 with the public address")
             appendLine("PersistentKeepalive = 25")
         }
     }
