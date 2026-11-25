@@ -4,8 +4,19 @@ package app.timiao.et.core
 public object TomlCodec {
 
     public fun importToml(text: String): NetworkConfig {
+        // Parse the whole document once so error line numbers point at the
+        // text the user sees. ACL sections are valid TOML and are parsed here.
+        try {
+            TomlParser(text).parse()
+        } catch (error: TomlSyntaxError) {
+            throw tomParseException(text, error)
+        }
         val (aclRaw, body) = TomlAcl.split(text)
-        val root = TomlParser(body).parse()
+        val root = try {
+            TomlParser(body).parse()
+        } catch (error: TomlSyntaxError) {
+            throw tomParseException(text, error)
+        }
 
         fun str(key: String): String? = (root.entries[key] as? TomlValue.Str)?.value
         fun bool(key: String): Boolean? = (root.entries[key] as? TomlValue.BoolVal)?.value
