@@ -1,0 +1,171 @@
+name: track-upstream
+
+on:
+  schedule:
+    # Daily at 03:17 UTC.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      allow_prerelease:
+        description: "Allow a prerelease tag when no stable release exists"
+        type: boolean
+        default: false
+      tag:
+        description: "Explicit upstream tag (overrides release lookup)"
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: track-upstream
+  cancel-in-progress: false
+
+env:
+  NDK_VERSION: "27.0.12077973"
+
+jobs:
+  check:
+    name: Resolve upstream tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      should_build: ${{ steps.resolve.outputs.should_build }}
+      current: ${{ steps.resolve.outputs.current }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag }}
+          ALLOW_PRERELEASE: ${{ inputs.allow_prerelease }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${INPUT_TAG}" ]]; then
+            tag="${INPUT_TAG}"
+          elif [[ "${ALLOW_PRERELEASE}" == "true" ]]; then
+            tag="$(gh api 'repos/EasyTier/EasyTier/releases?per_page=30' \
+              --jq '[.[] | select(.draft | not)][0].tag_name')"
+          else
+            tag="$(gh api repos/EasyTier/EasyTier/releases/latest --jq '.tag_name')"
+          fi
+          if [[ -z "${tag}" || "${tag}" == "null" ]]; then
+            echo "::error::Could not resolve an upstream release tag"
+            exit 1
+          fi
+          current="$(tr -d '[:space:]' < kernel/UPSTREAM_TAG || true)"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "current=${current}" >> "$GITHUB_OUTPUT"
+          if [[ "${tag}" != "${current}" ]]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build ${{ needs.check.outputs.tag }}
+    needs: check
+    if: needs.check.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.95"
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Install cargo-ndk
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            kernel/src/target
+          key: kernel-${{ runner.os }}-${{ needs.check.outputs.tag }}-${{ hashFiles('scripts/build-kernel.sh') }}
+          restore-keys: |
+            kernel-${{ runner.os }}-${{ needs.check.outputs.tag }}-
+
+      - name: Install Android NDK r27
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+          yes | "${SDK}/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "${SDK}/cmdline-tools/latest/bin/sdkmanager" "ndk;${NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${SDK}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Build all ABIs
+        env:
+          EASYTIER_PROXY: ""
+          EASYTIER_LOCAL_SRC: ""
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-kernel.sh
+          ./scripts/build-kernel.sh \
+            --tag "${{ needs.check.outputs.tag }}" \
+            --abis "arm64-v8a,armeabi-v7a,x86,x86_64" \
+            --no-jni-libs
+
+      - name: Smoke check exports and 16 KB LOAD alignment
+        run: |
+          set -euo pipefail
+          readelf="$(find "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt" -path '*/bin/llvm-readelf' -type f | head -1)"
+          test -n "${readelf}"
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            so="kernel/out/${abi}/libeasytier_android_jni.so"
+            test -f "${so}"
+            "${readelf}" --dyn-syms -W "${so}" | grep -q 'Java_com_easytier_jni_EasyTierJNI_runNetworkInstance' \
+              || { echo "::error::${abi}: missing runNetworkInstance export"; exit 1; }
+            loads="$("${readelf}" -lW "${so}" | awk '$1 == "LOAD"')"
+            if [[ -z "${loads}" ]]; then
+              echo "::error::${abi}: no LOAD segments"; exit 1
+            fi
+            if grep -qv '0x4000' <<<"${loads}"; then
+              echo "::error::${abi}: LOAD segment not aligned to 0x4000"; echo "${loads}"; exit 1
+            fi
+            printf '%s: %s bytes\n' "${abi}" "$(wc -c < "${so}")"
+          done
+
+      - name: Stage version bump
+        run: |
+          set -euo pipefail
+          echo "${{ needs.check.outputs.tag }}" > kernel/UPSTREAM_TAG
+
+      - name: Upload built libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: easytier-kernel-${{ needs.check.outputs.tag }}
+          path: kernel/out/**/*.so
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: kernel/upstream-${{ needs.check.outputs.tag }}
+          base: main
+          add-paths: kernel/UPSTREAM_TAG
+          delete-branch: true
+          title: "kernel: update EasyTier to ${{ needs.check.outputs.tag }}"
+          commit-message: "kernel: update EasyTier to ${{ needs.check.outputs.tag }}"
+          body: |
+            Automated tracking of the upstream EasyTier stable release.
+
+            - Previous tag: `${{ needs.check.outputs.current }}`
+            - New tag: `${{ needs.check.outputs.tag }}`
+            - ABIs built: arm64-v8a, armeabi-v7a, x86, x86_64
+            - Patches in `kernel/patches/` applied
+            - Smoke check passed: `Java_com_easytier_jni_EasyTierJNI_runNetworkInstance` exported
+            - 16 KB page alignment verified: every LOAD segment reports `Align 0x4000`
+
+            Build artifacts are attached to this workflow run. Review `kernel/README.md`
+            for the patch policy before merging.
