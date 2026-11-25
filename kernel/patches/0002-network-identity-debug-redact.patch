@@ -11,7 +11,7 @@
 --- a/easytier-core/src/config/mod.rs
 +++ b/easytier-core/src/config/mod.rs
 @@ -138,11 +138,28 @@
-     Ok(config_broken)
+     Ok(config)
  }
  
 -#[derive(Debug, Clone, Serialize, Deserialize)]
