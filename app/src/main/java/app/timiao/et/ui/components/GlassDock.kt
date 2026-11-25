@@ -90,10 +90,7 @@ fun GlassDock(
                         .weight(1f)
                         .height(38.dp)
                         .clip(pill)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { onNavigate(item.route) },
+                        .clickable { onNavigate(item.route) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(

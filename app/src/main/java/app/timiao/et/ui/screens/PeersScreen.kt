@@ -59,6 +59,8 @@ import app.timiao.et.ui.components.AvatarBadge
 import app.timiao.et.ui.components.DockInset
 import app.timiao.et.ui.components.EmptyGlassCard
 import app.timiao.et.ui.components.GlassLevel
+import app.timiao.et.ui.components.GlassPillAction
+import app.timiao.et.ui.components.GlassSearchField
 import app.timiao.et.ui.components.GlassTextField
 import app.timiao.et.ui.components.InfoRow
 import app.timiao.et.ui.components.OrbButton
@@ -73,6 +75,7 @@ import app.timiao.et.ui.util.TopologyLayout
 import app.timiao.et.ui.util.copyToClipboard
 import app.timiao.et.ui.util.costLabel
 import app.timiao.et.ui.util.formatBytes
+import app.timiao.et.ui.util.initialOf
 import app.timiao.et.ui.util.isRelay
 import app.timiao.et.ui.util.natLabel
 import app.timiao.et.ui.util.stableKey
@@ -133,9 +136,9 @@ fun PeersScreen(
                 title = "节点",
                 subtitle = active?.let { "${it.name} · ${status.peers.size} 只" } ?: "未选择网络",
                 action = {
-                    OrbButton(
+                    GlassPillAction(
+                        text = "日志",
                         icon = Icons.Filled.List,
-                        label = "事件日志",
                         onClick = { onNavigate(Routes.EVENT_LOG) },
                     )
                 },
@@ -149,12 +152,10 @@ fun PeersScreen(
             )
         }
         item {
-            GlassTextField(
+            GlassSearchField(
                 value = query,
                 onValueChange = { query = it },
-                label = "搜索",
-                placeholder = "主机名或 IP",
-                mono = true,
+                placeholder = "搜索主机名或 IP",
             )
         }
         item {
@@ -199,7 +200,7 @@ fun PeersScreen(
 
         item {
             Text(
-                text = "提示：长按节点可复制 IP 地址；右上角打开事件日志。",
+                text = "长按节点可复制 IP。",
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 6.dp),
@@ -354,8 +355,14 @@ private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myPeerId: Strin
     val surface = MaterialTheme.colorScheme.surface
     val onSurface = MaterialTheme.colorScheme.onSurface
     val measurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(color = onSurface, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
-    val subStyle = TextStyle(color = g.muted, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val labelStyle = TextStyle(color = onSurface, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+    val subStyle = TextStyle(color = g.muted, fontSize = 9.5.sp, fontFamily = FontFamily.Monospace)
+    val initialStyle = TextStyle(
+        color = onSurface,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Black,
+    )
     val peerPalette = listOf(
         Color(0xFF7CC6A4), Color(0xFF8FB6FF), Color(0xFFC39BFF),
         Color(0xFFF0A96B), Color(0xFFE58FA8), Color(0xFF74B9C9),
@@ -363,18 +370,15 @@ private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myPeerId: Strin
 
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val widthDp = maxWidth.value
-        // Recomputed once per poll (or width change); positions are pure data and unit tested.
-        val layout = remember(peers, myIpv4, myPeerId, widthDp) {
-            TopologyLayout.layout(peers, myIpv4, myPeerId, widthDp)
-        }
-        val labelMaxPx = with(androidx.compose.ui.platform.LocalDensity.current) {
-            (TopologyLayout.CELL_W_DP - 8f).dp.roundToPx()
+        // Recomputed once per poll (or width/font-scale change); positions are pure data.
+        val layout = remember(peers, myIpv4, myPeerId, widthDp, density.fontScale) {
+            TopologyLayout.layout(peers, myIpv4, myPeerId, widthDp, density.fontScale)
         }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .glass(RoundedCornerShape(26.dp), GlassLevel.Regular)
-                .padding(12.dp),
+                .padding(horizontal = 10.dp, vertical = 12.dp),
         ) {
             Canvas(
                 modifier = Modifier
@@ -383,25 +387,50 @@ private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myPeerId: Strin
             ) {
                 val nodeR = TopologyLayout.NODE_R_DP.dp.toPx()
                 val centerR = nodeR + 5.dp.toPx()
+                val labelGap = 5.dp.toPx()
+                val subGap = 2.dp.toPx()
+                val edgeGap = 4.dp.toPx()
                 val nodesByKey = layout.nodes.associateBy { it.key }
+                // Measure first: edges start below the label block, so they never cross text.
+                val measured = layout.nodes.associateWith { node ->
+                    val maxW = (node.cellWDp - 12f).dp.roundToPx().coerceAtLeast(1)
+                    val label = measurer.measure(
+                        text = node.label,
+                        style = labelStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        constraints = Constraints(maxWidth = maxW),
+                    )
+                    val sub = measurer.measure(
+                        text = node.sub,
+                        style = subStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        constraints = Constraints(maxWidth = maxW),
+                    )
+                    label to sub
+                }
 
                 layout.edges.forEach { edge ->
                     val fromNode = nodesByKey[edge.fromKey] ?: return@forEach
                     val toNode = nodesByKey[edge.toKey] ?: return@forEach
+                    val (label, sub) = measured[fromNode] ?: return@forEach
                     val from = Offset(fromNode.xDp.dp.toPx(), fromNode.yDp.dp.toPx())
                     val to = Offset(toNode.xDp.dp.toPx(), toNode.yDp.dp.toPx())
-                    val midY = (from.y + to.y) / 2f
+                    val startY = from.y + nodeR + labelGap + label.size.height + subGap + sub.size.height + edgeGap
+                    val endY = to.y - nodeR
+                    val midY = (startY + endY) / 2f
                     val path = Path().apply {
-                        moveTo(from.x, from.y + nodeR)
-                        cubicTo(from.x, midY, to.x, midY, to.x, to.y - nodeR)
+                        moveTo(from.x, startY)
+                        cubicTo(from.x, midY, to.x, midY, to.x, endY)
                     }
                     drawPath(
                         path = path,
-                        color = if (edge.isRelay) g.muted.copy(alpha = 0.55f) else accent.copy(alpha = 0.5f),
+                        color = if (edge.isRelay) g.muted.copy(alpha = 0.6f) else accent.copy(alpha = 0.55f),
                         style = Stroke(
-                            width = if (edge.isRelay) 1.4.dp.toPx() else 2.dp.toPx(),
+                            width = if (edge.isRelay) 1.6.dp.toPx() else 2.2.dp.toPx(),
                             pathEffect = if (edge.isRelay) {
-                                PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx()))
+                                PathEffect.dashPathEffect(floatArrayOf(7.dp.toPx(), 5.dp.toPx()))
                             } else {
                                 null
                             },
@@ -413,9 +442,9 @@ private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myPeerId: Strin
                     val center = Offset(node.xDp.dp.toPx(), node.yDp.dp.toPx())
                     if (node.isRoot) {
                         drawCircle(surface.copy(alpha = 0.95f), radius = centerR + 2.dp.toPx(), center = center)
-                        drawCircle(accent.copy(alpha = 0.18f), radius = centerR + 2.dp.toPx(), center = center)
-                        drawCircle(accent, radius = centerR, center = center, style = Stroke(2.dp.toPx()))
-                        val earSize = 9.dp.toPx()
+                        drawCircle(accent.copy(alpha = 0.16f), radius = centerR + 2.dp.toPx(), center = center)
+                        drawCircle(accent, radius = centerR, center = center, style = Stroke(2.4.dp.toPx()))
+                        val earSize = 11.dp.toPx()
                         val leftEar = Path().apply {
                             moveTo(center.x - centerR * 0.62f, center.y - centerR * 0.55f)
                             lineTo(center.x - centerR * 0.8f, center.y - centerR - earSize)
@@ -433,36 +462,46 @@ private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myPeerId: Strin
                     } else {
                         val color = peerPalette[abs(node.key.hashCode()) % peerPalette.size]
                         drawCircle(surface.copy(alpha = 0.95f), radius = nodeR, center = center)
-                        drawCircle(color.copy(alpha = 0.30f), radius = nodeR, center = center)
+                        drawCircle(color.copy(alpha = 0.22f), radius = nodeR, center = center)
                         drawCircle(
                             color = color,
                             radius = nodeR,
                             center = center,
-                            style = Stroke(1.5.dp.toPx()),
+                            style = Stroke(
+                                width = 2.dp.toPx(),
+                                pathEffect = if (node.isRelay) {
+                                    PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))
+                                } else {
+                                    null
+                                },
+                            ),
+                        )
+                        val initial = measurer.measure(
+                            text = initialOf(node.label),
+                            style = initialStyle,
+                            maxLines = 1,
+                        )
+                        drawText(
+                            textLayoutResult = initial,
+                            topLeft = Offset(
+                                center.x - initial.size.width / 2f,
+                                center.y - initial.size.height / 2f,
+                            ),
                         )
                     }
 
-                    val label = measurer.measure(
-                        text = node.label,
-                        style = labelStyle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        constraints = Constraints(maxWidth = labelMaxPx),
-                    )
+                    val (label, sub) = measured.getValue(node)
+                    val labelTop = center.y + nodeR + labelGap
                     drawText(
                         textLayoutResult = label,
-                        topLeft = Offset(center.x - label.size.width / 2f, center.y + nodeR + 6.dp.toPx()),
-                    )
-                    val sub = measurer.measure(
-                        text = node.sub,
-                        style = subStyle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        constraints = Constraints(maxWidth = labelMaxPx),
+                        topLeft = Offset(center.x - label.size.width / 2f, labelTop),
                     )
                     drawText(
                         textLayoutResult = sub,
-                        topLeft = Offset(center.x - sub.size.width / 2f, center.y + nodeR + 20.dp.toPx()),
+                        topLeft = Offset(
+                            center.x - sub.size.width / 2f,
+                            labelTop + label.size.height + subGap,
+                        ),
                     )
                 }
             }
@@ -479,20 +518,31 @@ private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myPeerId: Strin
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.size(14.dp, 2.dp).glass(RoundedCornerShape(2.dp), GlassLevel.Subtle))
+                Canvas(Modifier.size(width = 24.dp, height = 8.dp)) {
+                    drawLine(
+                        color = accent,
+                        start = Offset(0f, size.height / 2f),
+                        end = Offset(size.width, size.height / 2f),
+                        strokeWidth = 2.dp.toPx(),
+                    )
+                }
                 Spacer(Modifier.width(5.dp))
                 Text("直连", style = MaterialTheme.typography.labelSmall, color = g.muted)
-                Spacer(Modifier.width(15.dp))
-                Text("┄", style = MaterialTheme.typography.labelSmall, color = g.muted)
+                Spacer(Modifier.width(16.dp))
+                Canvas(Modifier.size(width = 24.dp, height = 8.dp)) {
+                    drawLine(
+                        color = g.muted,
+                        start = Offset(0f, size.height / 2f),
+                        end = Offset(size.width, size.height / 2f),
+                        strokeWidth = 1.6.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(
+                            floatArrayOf(6.dp.toPx(), 4.dp.toPx()),
+                        ),
+                    )
+                }
                 Spacer(Modifier.width(5.dp))
                 Text("中继", style = MaterialTheme.typography.labelSmall, color = g.muted)
             }
-            Text(
-                text = "按 next_hop 分层：中继画在下一跳节点之后。",
-                style = MaterialTheme.typography.labelSmall,
-                color = g.muted,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            )
         }
     }
 }

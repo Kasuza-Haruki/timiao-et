@@ -3,6 +3,9 @@ package app.timiao.et.ui.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -11,6 +14,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -35,7 +39,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -52,18 +58,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.timiao.et.R
 import app.timiao.et.core.PeerInfo
 import app.timiao.et.ui.theme.LocalGlassColors
 import app.timiao.et.ui.theme.LocalReducedMotion
@@ -76,6 +87,13 @@ import java.util.Locale
 import kotlin.math.abs
 
 val DockInset: PaddingValues = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 132.dp)
+
+/** Content padding for pushed pages, where the dock is hidden. */
+@Composable
+fun pageInset(): PaddingValues {
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    return PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp + navBottom)
+}
 
 @Composable
 fun ScreenHeader(
@@ -132,7 +150,7 @@ fun OrbButton(
     val shape = CircleShape
     Box(
         modifier = modifier
-            .size(42.dp)
+            .size(48.dp)
             .glass(shape, GlassLevel.Strong)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -140,8 +158,44 @@ fun OrbButton(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            modifier = Modifier.size(21.dp),
+            modifier = Modifier.size(22.dp),
             tint = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+/** Compact glass capsule with an optional icon; keeps a 48 dp touch target. */
+@Composable
+fun GlassPillAction(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+) {
+    val g = LocalGlassColors.current
+    Row(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .glass(RoundedCornerShape(999.dp), GlassLevel.Subtle)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val tint = if (enabled) MaterialTheme.colorScheme.primary else g.muted
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(17.dp),
+                tint = tint,
+            )
+            Spacer(Modifier.width(5.dp))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+            color = tint,
         )
     }
 }
@@ -165,6 +219,7 @@ fun PillButton(
     Box(
         modifier = modifier
             .clip(shape)
+            .alpha(if (enabled) 1f else 0.45f)
             .background(bg)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 26.dp, vertical = 12.dp),
@@ -300,9 +355,14 @@ fun PeerRow(
                 overflow = TextOverflow.Ellipsis,
             )
             val detail = if (peer.isRelay()) {
-                "${peer.ipv4 ?: "—"} · 经中继 · ${peer.tunnelLabel()}"
+                listOfNotNull(peer.ipv4 ?: "—", "经中继", peer.tunnelLabel().takeUnless { it == "—" })
+                    .joinToString(" · ")
             } else {
-                "${peer.ipv4 ?: "—"} · ${peer.tunnelLabel()} · ${natLabel(peer.natType)}"
+                listOfNotNull(
+                    peer.ipv4 ?: "—",
+                    peer.tunnelLabel().takeUnless { it == "—" },
+                    natLabel(peer.natType).takeUnless { it == "—" },
+                ).joinToString(" · ")
             }
             Text(
                 text = detail,
@@ -420,6 +480,57 @@ fun GlassTextField(
 }
 
 @Composable
+fun GlassSearchField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "搜索主机名或 IP",
+) {
+    val g = LocalGlassColors.current
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .glass(RoundedCornerShape(999.dp), GlassLevel.Subtle)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Search,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = g.muted,
+        )
+        Spacer(Modifier.width(9.dp))
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.weight(1f),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
+            singleLine = true,
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            decorationBox = { inner ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty()) {
+                        Text(
+                            placeholder,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = g.muted.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+    }
+}
+
+@Composable
 fun SegmentedGlass(
     options: List<String>,
     selected: Int,
@@ -446,7 +557,7 @@ fun SegmentedGlass(
             Modifier
                 .offset { IntOffset((position * slotPx).roundToInt(), 0) }
                 .width(slot)
-                .height(34.dp)
+                .height(36.dp)
                 .clip(shape)
                 .background(g.dockSelected),
         )
@@ -456,18 +567,17 @@ fun SegmentedGlass(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(34.dp)
+                        .height(36.dp)
                         .clip(shape)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { onSelect(index) },
+                        .clickable { onSelect(index) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = label,
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
                         color = lerp(g.muted, MaterialTheme.colorScheme.primary, near),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -577,6 +687,7 @@ fun EmptyGlassCard(
     modifier: Modifier = Modifier,
     actionText: String? = null,
     onAction: (() -> Unit)? = null,
+    loading: Boolean = false,
 ) {
     val g = LocalGlassColors.current
     Column(
@@ -586,7 +697,28 @@ fun EmptyGlassCard(
             .padding(18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = g.muted)
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(22.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.height(8.dp))
+        } else {
+            Image(
+                painter = painterResource(R.drawable.ic_empty_cat),
+                contentDescription = null,
+                modifier = Modifier.size(width = 64.dp, height = 56.dp),
+                alpha = 0.92f,
+            )
+            Spacer(Modifier.height(4.dp))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = g.muted,
+            textAlign = TextAlign.Center,
+        )
         if (actionText != null && onAction != null) {
             Spacer(Modifier.height(10.dp))
             PillButton(actionText, onAction)
@@ -648,12 +780,11 @@ fun ClickableGlassRow(
     shape: RoundedCornerShape = RoundedCornerShape(18.dp),
     content: @Composable () -> Unit,
 ) {
-    val source = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
             .fillMaxWidth()
             .glass(shape, GlassLevel.Subtle)
-            .clickable(interactionSource = source, indication = null, onClick = onClick),
+            .clickable(onClick = onClick),
     ) {
         content()
     }
