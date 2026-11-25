@@ -12,6 +12,7 @@ import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,6 +51,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,7 +67,6 @@ import app.timiao.et.core.diag.DiagnosticInput
 import app.timiao.et.core.diag.DiagnosticReport
 import app.timiao.et.core.diag.DiagnosticsEngine
 import app.timiao.et.ui.AppViewModel
-import app.timiao.et.ui.components.DockInset
 import app.timiao.et.ui.components.GlassBackdrop
 import app.timiao.et.ui.components.GlassLevel
 import app.timiao.et.ui.components.OrbButton
@@ -73,6 +74,7 @@ import app.timiao.et.ui.components.PillButton
 import app.timiao.et.ui.components.ScreenHeader
 import app.timiao.et.ui.components.SectionLabel
 import app.timiao.et.ui.components.glass
+import app.timiao.et.ui.components.pageInset
 import app.timiao.et.ui.data.AppSettings
 import app.timiao.et.ui.data.UiNetwork
 import app.timiao.et.ui.data.toConfig
@@ -183,7 +185,7 @@ internal fun DiagnosticsContent(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = DockInset,
+        contentPadding = pageInset(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
@@ -257,6 +259,12 @@ private fun OverallCard(
                 }
             }
             report == null -> {
+                Image(
+                    painter = painterResource(app.timiao.et.R.drawable.ic_empty_cat),
+                    contentDescription = null,
+                    modifier = Modifier.size(width = 64.dp, height = 56.dp),
+                    alpha = 0.92f,
+                )
                 Text(
                     "还没有诊断结果",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),

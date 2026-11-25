@@ -210,7 +210,7 @@ fun HomeScreen(
 
         item {
             Text(
-                text = "速率 = 1 秒字节增量，指数平滑 α=0.4。",
+                text = "实时速率，每秒刷新。",
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 6.dp),

@@ -27,11 +27,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.timiao.et.ui.AppViewModel
-import app.timiao.et.ui.components.DockInset
 import app.timiao.et.ui.components.EmptyGlassCard
 import app.timiao.et.ui.components.GlassLevel
 import app.timiao.et.ui.components.ScreenHeader
 import app.timiao.et.ui.components.glass
+import app.timiao.et.ui.components.pageInset
 import app.timiao.et.ui.theme.LocalGlassColors
 import app.timiao.et.ui.util.copyToClipboard
 import app.timiao.et.ui.util.natLabel
@@ -49,7 +49,7 @@ fun NodeInfoScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = DockInset,
+        contentPadding = pageInset(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {

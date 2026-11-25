@@ -32,8 +32,6 @@ import app.timiao.et.ui.components.ScreenHeader
 import app.timiao.et.ui.components.SectionLabel
 import app.timiao.et.ui.components.SegmentedGlass
 import app.timiao.et.ui.components.glass
-import app.timiao.et.ui.data.AppLanguage
-import app.timiao.et.ui.data.LogLevel
 import app.timiao.et.ui.data.ThemeMode
 import app.timiao.et.ui.theme.LocalGlassColors
 import app.timiao.et.ui.theme.LocalReducedMotion
@@ -51,7 +49,7 @@ fun SettingsScreen(vm: AppViewModel, onOpen: (String) -> Unit = {}) {
         contentPadding = DockInset,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item { ScreenHeader(title = "设置", subtitle = "外观、语言与关于") }
+        item { ScreenHeader(title = "设置", subtitle = "外观、工具与关于") }
 
         item { SectionLabel("连接与工具") }
         item { AutoRulesEntryRow { onOpen(AUTO_RULES_ROUTE) } }
@@ -91,24 +89,6 @@ fun SettingsScreen(vm: AppViewModel, onOpen: (String) -> Unit = {}) {
                 checked = settings.dynamicColor,
                 enabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
                 onCheckedChange = { vm.setDynamicColor(it) },
-            )
-        }
-        item {
-            GlassDropdownRow(
-                label = "语言",
-                current = settings.language,
-                options = AppLanguage.entries,
-                optionLabel = { it.label },
-                onSelect = { vm.setLanguage(it) },
-            )
-        }
-        item {
-            GlassDropdownRow(
-                label = "日志级别",
-                current = settings.logLevel,
-                options = LogLevel.entries,
-                optionLabel = { it.label },
-                onSelect = { vm.setLogLevel(it) },
             )
         }
 

@@ -28,7 +28,7 @@ val LightOnBackground = Color(0xFF3A2C24)
 val LightSurface = Color(0xFFFFF9F5)
 val LightOnSurface = Color(0xFF3A2C24)
 val LightSurfaceVariant = Color(0xFFF3E5DA)
-val LightOnSurfaceVariant = Color(0xFF8A776B)
+val LightOnSurfaceVariant = Color(0xFF7A685C)
 val LightOutline = Color(0xFFE6D6C9)
 val LightError = Color(0xFFB3261E)
 

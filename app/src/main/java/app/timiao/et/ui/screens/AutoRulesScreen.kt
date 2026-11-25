@@ -60,7 +60,7 @@ import app.timiao.et.auto.parseWifiNames
 import app.timiao.et.service.TimiaoVpnService
 import app.timiao.et.ui.AppViewModel
 import app.timiao.et.ui.components.ClickableGlassRow
-import app.timiao.et.ui.components.DockInset
+import app.timiao.et.ui.components.EmptyGlassCard
 import app.timiao.et.ui.components.GlassDropdownRow
 import app.timiao.et.ui.components.GlassLevel
 import app.timiao.et.ui.components.GlassSwitchRow
@@ -70,6 +70,7 @@ import app.timiao.et.ui.components.ScreenHeader
 import app.timiao.et.ui.components.SectionLabel
 import app.timiao.et.ui.components.SegmentedGlass
 import app.timiao.et.ui.components.glass
+import app.timiao.et.ui.components.pageInset
 import app.timiao.et.ui.data.UiNetwork
 import app.timiao.et.ui.theme.LocalGlassColors
 import kotlinx.coroutines.delay
@@ -188,7 +189,7 @@ fun AutoRulesScreen(vm: AppViewModel, onBack: () -> Unit) {
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = DockInset,
+        contentPadding = pageInset(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
@@ -290,18 +291,7 @@ fun AutoRulesScreen(vm: AppViewModel, onBack: () -> Unit) {
         item { SectionLabel("按网络") }
         if (networks.isEmpty()) {
             item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .glass(RoundedCornerShape(22.dp), GlassLevel.Regular)
-                        .padding(18.dp),
-                ) {
-                    Text(
-                        "还没有网络。先在「网络」页创建，再回到这里设置规则。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = g.muted,
-                    )
-                }
+                EmptyGlassCard("还没有网络。先在「网络」页创建，再回到这里设置规则。")
             }
         } else {
             items(networks.size) { index ->

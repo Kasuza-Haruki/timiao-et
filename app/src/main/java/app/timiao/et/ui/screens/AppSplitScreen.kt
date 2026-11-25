@@ -52,15 +52,16 @@ import app.timiao.et.split.SplitPolicy
 import app.timiao.et.split.SplitStore
 import app.timiao.et.ui.components.AvatarBadge
 import app.timiao.et.ui.components.ClickableGlassRow
-import app.timiao.et.ui.components.DockInset
 import app.timiao.et.ui.components.EmptyGlassCard
 import app.timiao.et.ui.components.GlassLevel
+import app.timiao.et.ui.components.GlassSearchField
 import app.timiao.et.ui.components.GlassSwitchRow
 import app.timiao.et.ui.components.GlassTextField
 import app.timiao.et.ui.components.ScreenHeader
 import app.timiao.et.ui.components.SectionLabel
 import app.timiao.et.ui.components.SegmentedGlass
 import app.timiao.et.ui.components.glass
+import app.timiao.et.ui.components.pageInset
 import app.timiao.et.ui.theme.LocalGlassColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -145,7 +146,7 @@ fun AppSplitScreen(networkId: String, onBack: () -> Unit) {
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().imePadding(),
-        contentPadding = DockInset,
+        contentPadding = pageInset(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
@@ -187,11 +188,10 @@ fun AppSplitScreen(networkId: String, onBack: () -> Unit) {
             item { EmptyGlassCard("当前模式无需选择应用。") }
         } else {
             item {
-                GlassTextField(
+                GlassSearchField(
                     value = query,
                     onValueChange = { query = it },
-                    label = "搜索应用",
-                    placeholder = "应用名或包名",
+                    placeholder = "搜索应用名或包名",
                 )
             }
             item {
@@ -212,7 +212,7 @@ fun AppSplitScreen(networkId: String, onBack: () -> Unit) {
                 )
             }
             when {
-                loading -> item { EmptyGlassCard("正在读取应用…") }
+                loading -> item { EmptyGlassCard("正在读取应用…", loading = true) }
                 filtered.isEmpty() -> item {
                     EmptyGlassCard(
                         if (!showSystem && apps.isEmpty()) {
