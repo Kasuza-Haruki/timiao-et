@@ -125,6 +125,8 @@ class JniEngineTest {
 
             engine.stop(config.id)
             assertTrue(bridge.calls.contains("deleteNetworkInstance:phone"))
+            // TUN must be released (fd=0) before the instance is deleted.
+            assertTrue(bridge.calls.indexOf("setTunFd:phone:0") in 0 until bridge.calls.indexOf("deleteNetworkInstance:phone"))
             assertEquals(LinkState.Idle, engine.status.value.getValue(config.id).state)
         } finally {
             engine.close()

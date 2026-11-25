@@ -17,9 +17,15 @@ import kotlinx.serialization.json.contentOrNull
 internal object StatusParser {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
+    /** Real payload is `{"map": {"<instance>": {...}}}`. Older shapes without the wrapper still work. */
+    private fun entryOf(text: String, instanceName: String): JsonObject? {
+        val top = runCatching { json.parseToJsonElement(text) }.getOrNull() as? JsonObject ?: return null
+        val root = (top["map"] as? JsonObject) ?: top
+        return (root[instanceName] ?: root.values.firstOrNull()) as? JsonObject
+    }
+
     fun parse(text: String, instanceName: String, uptimeSec: Long): NetworkStatus? {
-        val root = runCatching { json.parseToJsonElement(text) }.getOrNull() as? JsonObject ?: return null
-        val entry = (root[instanceName] ?: root.values.firstOrNull()) as? JsonObject ?: return null
+        val entry = entryOf(text, instanceName) ?: return null
 
         val running = entry.bool("running") ?: false
         val myIpv4 = (entry["my_node_info"] as? JsonObject)?.get("virtual_ipv4").inetToString()
@@ -45,8 +51,7 @@ internal object StatusParser {
     }
 
     fun primaryIpv4(text: String, instanceName: String): String? {
-        val root = runCatching { json.parseToJsonElement(text) }.getOrNull() as? JsonObject ?: return null
-        val entry = (root[instanceName] ?: root.values.firstOrNull()) as? JsonObject ?: return null
+        val entry = entryOf(text, instanceName) ?: return null
         return (entry["my_node_info"] as? JsonObject)?.get("virtual_ipv4").inetToString()
     }
 

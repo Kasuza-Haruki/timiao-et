@@ -141,3 +141,20 @@ class StatusParserTest {
         assertEquals(null, StatusParser.parse("not json", "home", 0))
     }
 }
+
+class StatusParserRealPayloadTest {
+    private val text = javaClass.getResource("/sample_infos.json")!!.readText()
+
+    @org.junit.Test
+    fun parsesMapWrappedPayloadFromRealKernel() {
+        val ip = StatusParser.primaryIpv4(text, "Home-Lab")
+        org.junit.Assert.assertEquals("10.126.126.4/24", ip)
+        val st = StatusParser.parse(text, "Home-Lab", 5)!!
+        org.junit.Assert.assertEquals(LinkState.Connected, st.state)
+        org.junit.Assert.assertTrue(st.peers.isNotEmpty())
+        val touma = st.peers.first { it.hostname == "relay-1" }
+        org.junit.Assert.assertEquals("p2p", touma.cost)
+        org.junit.Assert.assertEquals("PortRestricted", touma.natType)
+        org.junit.Assert.assertNotNull(touma.latencyMs)
+    }
+}

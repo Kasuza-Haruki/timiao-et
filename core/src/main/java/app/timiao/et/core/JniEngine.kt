@@ -111,6 +111,10 @@ public class JniEngine(
     override suspend fun stop(id: String) {
         jobs.remove(id)?.cancelAndJoin()
         val instance = running.remove(id) ?: return
+        // fd=0 makes the kernel drain and close the TUN it owns. Without it the system keeps
+        // the VPN (and our service) alive after the instance is deleted.
+        runCatching { bridge.setTunFd(instance.config.instanceName, 0) }
+        delay(TUN_DRAIN_MS)
         runCatching { bridge.deleteNetworkInstance(instance.config.instanceName) }
         _status.update { current ->
             val base = current[id] ?: NetworkStatus(
@@ -188,5 +192,6 @@ public class JniEngine(
 
     private companion object {
         const val MAX_INSTANCES = 32
+        const val TUN_DRAIN_MS = 300L
     }
 }

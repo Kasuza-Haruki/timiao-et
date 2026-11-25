@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Debug only: lets adb import a TOML file and start a network. Not part of release builds. -->
+        <receiver
+            android:name="app.timiao.et.debug.DebugReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="app.timiao.et.DEBUG_IMPORT" />
+                <action android:name="app.timiao.et.DEBUG_START" />
+                <action android:name="app.timiao.et.DEBUG_STOP" />
+                <action android:name="app.timiao.et.DEBUG_DUMP" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

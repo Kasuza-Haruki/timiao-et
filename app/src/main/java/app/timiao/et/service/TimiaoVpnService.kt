@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import app.timiao.et.MainActivity
 import app.timiao.et.R
@@ -27,6 +28,9 @@ import kotlinx.coroutines.launch
 class TimiaoVpnService : VpnService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var tun: ParcelFileDescriptor? = null
+
+    /** fd number handed to the kernel. The kernel's shared NIC may keep it open after stop. */
+    @Volatile private var kernelFd: Int = -1
     private val activeIds = linkedSetOf<String>()
 
     private val engine get() = (application as TimiaoApplication).container.nativeEngine
@@ -48,6 +52,7 @@ class TimiaoVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.i(TAG, "command ${intent?.action} id=${intent?.getStringExtra(EXTRA_ID)} active=$activeIds")
         when (intent?.action) {
             ACTION_START -> intent.getStringExtra(EXTRA_ID)?.let { id ->
                 activeIds += id
@@ -58,9 +63,14 @@ class TimiaoVpnService : VpnService() {
             }
             ACTION_STOP -> scope.launch {
                 val ids = intent.getStringExtra(EXTRA_ID)?.let { listOf(it) } ?: activeIds.toList()
-                ids.forEach { runCatching { engine.stop(it) }; activeIds -= it }
+                ids.forEach { id ->
+                    runCatching { engine.stop(id) }.onFailure { Log.w(TAG, "stop $id failed: ${it.message}") }
+                    activeIds -= id
+                }
+                Log.i(TAG, "after stop active=$activeIds")
                 if (activeIds.isEmpty()) {
                     closeTun()
+                    stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
                 }
             }
@@ -70,7 +80,8 @@ class TimiaoVpnService : VpnService() {
 
     /** Called by the engine once the address is known. Returns a detached fd owned by the native side. */
     fun establishTun(addr: String, prefix: Int, routes: List<String>, mtu: Int): Int {
-        closeTun()
+        runCatching { tun?.close() }
+        tun = null
         val b = Builder()
             .setSession("Timiao")
             .setBlocking(false)
@@ -85,12 +96,26 @@ class TimiaoVpnService : VpnService() {
         if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
         val pfd = b.establish() ?: error("VPN permission was revoked")
         tun = pfd
-        return pfd.detachFd()
+        return pfd.detachFd().also { kernelFd = it }
     }
 
     private fun closeTun() {
         runCatching { tun?.close() }
         tun = null
+        releaseKernelFd()
+    }
+
+    /** Closes the TUN fd only if that number still points at /dev/tun, so a reused fd is never touched. */
+    private fun releaseKernelFd() {
+        val fd = kernelFd
+        Log.i(TAG, "releaseKernelFd fd=$fd target=${if (fd >= 0) runCatching { android.system.Os.readlink("/proc/self/fd/$fd") }.getOrElse { "ERR ${it.message}" } else "-"}")
+        if (fd < 0) return
+        kernelFd = -1
+        val target = runCatching { android.system.Os.readlink("/proc/self/fd/$fd") }.getOrNull()
+        if (target == "/dev/tun") {
+            runCatching { ParcelFileDescriptor.adoptFd(fd).close() }
+            Log.i(TAG, "released kernel tun fd=$fd")
+        }
     }
 
     override fun onRevoke() {
@@ -172,6 +197,7 @@ class TimiaoVpnService : VpnService() {
         const val EXTRA_ID = "id"
         private const val CHANNEL = "connection"
         private const val NOTIF_ID = 1
+        private const val TAG = "TimiaoVpn"
 
         /** Intent for the system VPN consent dialog, or null when consent is already granted. */
         fun prepareIntent(ctx: Context): Intent? = VpnService.prepare(ctx)
