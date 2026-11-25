@@ -17,6 +17,8 @@ import app.timiao.et.R
 import app.timiao.et.TimiaoApplication
 import app.timiao.et.core.LinkState
 import app.timiao.et.core.NetworkStatus
+import app.timiao.et.split.SplitStore
+import app.timiao.et.split.applyAppFilter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -92,7 +94,7 @@ class TimiaoVpnService : VpnService() {
             val p = cidr.split('/')
             runCatching { b.addRoute(p[0], p.getOrNull(1)?.toInt() ?: 32) }
         }
-        runCatching { b.addDisallowedApplication(packageName) }
+        applyAppFilter(b, SplitStore.policy(this, activeIds.lastOrNull() ?: ServiceState.last(this)))
         if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
         val pfd = b.establish() ?: error("VPN permission was revoked")
         tun = pfd
