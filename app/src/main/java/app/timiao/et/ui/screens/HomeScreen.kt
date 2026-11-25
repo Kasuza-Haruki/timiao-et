@@ -62,8 +62,10 @@ fun HomeScreen(
     val context = LocalContext.current
     val g = LocalGlassColors.current
 
+    val hasNetwork = active != null
     val reconnecting = status.reconnecting
     val statusTitle = when {
+        !hasNetwork -> "还没有网络"
         reconnecting -> "正在重连…"
         status.state == LinkState.Idle -> "未连接"
         status.state == LinkState.Connecting -> "正在连接…"
@@ -71,15 +73,15 @@ fun HomeScreen(
         else -> "连接出错"
     }
     val statusSub = when {
+        !hasNetwork -> ""
         reconnecting -> "网络中断，正在重连"
-        status.state == LinkState.Idle ->
-            if (active == null) "先创建一个网络吧" else "小猫在睡觉，点按钮唤醒天线"
+        status.state == LinkState.Idle -> "小猫在睡觉，点按钮唤醒天线"
         status.state == LinkState.Connecting -> "竖起天线找节点"
         status.state == LinkState.Connected ->
             "${status.myIpv4 ?: "—"} · ${formatUptime(status.uptimeSec)}"
         else -> status.error ?: "配置有问题，点开看原因"
     }
-    val buttonText = when {
+    val buttonText = if (!hasNetwork) "创建网络" else when {
         reconnecting -> "断开连接"
         status.state == LinkState.Idle -> "连接"
         status.state == LinkState.Connecting -> "取消连接"
@@ -105,8 +107,8 @@ fun HomeScreen(
             )
         }
 
-        item {
-            if (active != null) {
+        if (active != null) {
+            item {
                 val server = active!!.servers.firstOrNull().orEmpty()
                 GlassDropdownRow(
                     label = if (server.isBlank()) "当前网络" else "当前网络 · $server",
@@ -115,12 +117,6 @@ fun HomeScreen(
                     optionLabel = { it.name.ifBlank { "未命名网络" } },
                     onSelect = { vm.selectNetwork(it.id) },
                     enabled = networks.size > 1,
-                )
-            } else {
-                EmptyGlassCard(
-                    text = "还没有网络。",
-                    actionText = "创建网络",
-                    onAction = { onNavigate("networks") },
                 )
             }
         }
@@ -147,18 +143,23 @@ fun HomeScreen(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = statusSub,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                    color = g.muted,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (statusSub.isNotEmpty()) {
+                    Text(
+                        text = statusSub,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                        color = g.muted,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
                 PillButton(
                     text = buttonText,
-                    onClick = { vm.toggleActiveNetwork() },
-                    enabled = active != null,
+                    onClick = {
+                        if (active == null) onNavigate(Routes.NETWORKS)
+                        else vm.toggleActiveNetwork()
+                    },
+                    enabled = true,
                 )
             }
         }
