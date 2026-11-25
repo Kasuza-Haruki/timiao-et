@@ -8,3 +8,4 @@ kernel/out/
 kernel/src/
 *.keystore
 *.jks
+.claude/
