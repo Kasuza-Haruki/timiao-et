@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Empty-state illustration: sleeping cat, transparent background. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="104dp"
+    android:viewportWidth="120"
+    android:viewportHeight="104">
+
+    <group android:name="cat">
+
+        <!-- left ear -->
+        <path
+            android:pathData="M22 44 L24 8 Q25 3 30 6 L54 26 Z"
+            android:fillColor="#8A6448"
+            android:strokeColor="#4A3426"
+            android:strokeWidth="2.4"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M28 36 L29 16 L44 28 Z"
+            android:fillColor="#B48A6A" />
+
+        <!-- right ear -->
+        <path
+            android:pathData="M98 44 L96 8 Q95 3 90 6 L66 26 Z"
+            android:fillColor="#8A6448"
+            android:strokeColor="#4A3426"
+            android:strokeWidth="2.4"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M92 36 L91 16 L76 28 Z"
+            android:fillColor="#B48A6A" />
+
+        <!-- cream face -->
+        <path
+            android:pathData="M13 60 C13 39.02 34.03 22 60 22 C85.97 22 107 39.02 107 60 C107 80.98 85.97 98 60 98 C34.03 98 13 80.98 13 60 Z"
+            android:fillColor="#F4E7D7"
+            android:strokeColor="#4A3426"
+            android:strokeWidth="2.4"
+            android:strokeLineJoin="round" />
+
+        <!-- muzzle patch -->
+        <path
+            android:pathData="M45 68 C45 61.09 51.72 55.5 60 55.5 C68.28 55.5 75 61.09 75 68 C75 74.91 68.28 80.5 60 80.5 C51.72 80.5 45 74.91 45 68 Z"
+            android:fillColor="#A47C5E" />
+
+        <!-- nose -->
+        <path
+            android:pathData="M57 64 L63 64 L60 67.2 Z"
+            android:fillColor="#3B2A22" />
+
+        <!-- whiskers -->
+        <path
+            android:pathData="M6 66 L19 68"
+            android:fillColor="#00000000"
+            android:strokeColor="#4A3426"
+            android:strokeWidth="1.6"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M7 75 L19 73"
+            android:fillColor="#00000000"
+            android:strokeColor="#4A3426"
+            android:strokeWidth="1.6"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M114 66 L101 68"
+            android:fillColor="#00000000"
+            android:strokeColor="#4A3426"
+            android:strokeWidth="1.6"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M113 75 L101 73"
+            android:fillColor="#00000000"
+            android:strokeColor="#4A3426"
+            android:strokeWidth="1.6"
+            android:strokeLineCap="round" />
+
+        <!-- closed eyes -->
+        <path
+            android:pathData="M29 59 Q38 66 47 59"
+            android:fillColor="#00000000"
+            android:strokeColor="#3B2A22"
+            android:strokeWidth="2.4"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M73 59 Q82 66 91 59"
+            android:fillColor="#00000000"
+            android:strokeColor="#3B2A22"
+            android:strokeWidth="2.4"
+            android:strokeLineCap="round" />
+
+        <!-- small sleep mouth -->
+        <path
+            android:pathData="M56 72 Q60 74.5 64 72"
+            android:fillColor="#00000000"
+            android:strokeColor="#3B2A22"
+            android:strokeWidth="2.2"
+            android:strokeLineCap="round" />
+
+        <!-- z z -->
+        <path
+            android:pathData="M95 21 L103 21 L95 30 L103 30"
+            android:fillColor="#00000000"
+            android:strokeColor="#9AA7D6"
+            android:strokeWidth="2.4"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M106 11 L111 11 L106 17 L111 17"
+            android:fillColor="#00000000"
+            android:strokeColor="#9AA7D6"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

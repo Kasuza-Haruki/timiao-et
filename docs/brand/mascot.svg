@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 140" width="500" height="140">
+  <title>缇喵 mascot — 原创矢量源</title>
+
+  <defs>
+    <!-- 基础猫头：奶油脸、深棕耳朵、鼻口斑、胡须 -->
+    <g id="cat-base">
+      <path d="M22 44 L24 8 Q25 3 30 6 L54 26 Z" fill="#8A6448" stroke="#4A3426" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M28 36 L29 16 L44 28 Z" fill="#B48A6A"/>
+      <path d="M98 44 L96 8 Q95 3 90 6 L66 26 Z" fill="#8A6448" stroke="#4A3426" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M92 36 L91 16 L76 28 Z" fill="#B48A6A"/>
+      <ellipse cx="60" cy="60" rx="47" ry="38" fill="#F4E7D7" stroke="#4A3426" stroke-width="2.4"/>
+      <ellipse cx="60" cy="68" rx="15" ry="12.5" fill="#A47C5E"/>
+      <path d="M57 64 h6 l-3 3.2 z" fill="#3B2A22"/>
+      <g stroke="#4A3426" stroke-width="1.6" stroke-linecap="round">
+        <line x1="6" y1="66" x2="19" y2="68"/>
+        <line x1="7" y1="75" x2="19" y2="73"/>
+        <line x1="114" y1="66" x2="101" y2="68"/>
+        <line x1="113" y1="75" x2="101" y2="73"/>
+      </g>
+    </g>
+
+    <!-- 玻璃珠大眼：深色眼珠、浅蓝下缘、高光 -->
+    <g id="eyes-open">
+      <circle cx="38" cy="58" r="13.5" fill="#1D1822"/>
+      <circle cx="82" cy="58" r="13.5" fill="#1D1822"/>
+      <path d="M26.5 63 a13.5 13.5 0 0 0 23 0 a14 10 0 0 1 -23 0z" fill="#BFE3EF"/>
+      <path d="M70.5 63 a13.5 13.5 0 0 0 23 0 a14 10 0 0 1 -23 0z" fill="#BFE3EF"/>
+      <circle cx="42" cy="52" r="4" fill="#FFFFFF"/>
+      <circle cx="86" cy="52" r="4" fill="#FFFFFF"/>
+      <circle cx="33.5" cy="61" r="1.6" fill="#FFFFFF"/>
+      <circle cx="77.5" cy="61" r="1.6" fill="#FFFFFF"/>
+    </g>
+
+    <path id="mouth-w" d="M54 71 q3 3.5 6 0 q3 3.5 6 0" fill="none" stroke="#3B2A22" stroke-width="1.8" stroke-linecap="round"/>
+  </defs>
+
+  <!-- 未连接：睡着，天线收起 -->
+  <g transform="translate(0 18)">
+    <title>未连接：睡着</title>
+    <use href="#cat-base"/>
+    <g fill="none" stroke="#3B2A22" stroke-width="2.4" stroke-linecap="round">
+      <path d="M29 59 Q38 66 47 59"/>
+      <path d="M73 59 Q82 66 91 59"/>
+    </g>
+    <path d="M56 72 Q60 74.5 64 72" fill="none" stroke="#3B2A22" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M95 21 L103 21 L95 30 L103 30" fill="none" stroke="#9AA7D6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M106 11 L111 11 L106 17 L111 17" fill="none" stroke="#9AA7D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- 连接中：竖起天线找节点 -->
+  <g transform="translate(125 18)">
+    <title>连接中：天线寻路</title>
+    <use href="#cat-base"/>
+    <g fill="#3B2A22">
+      <circle cx="40" cy="58" r="9"/>
+      <circle cx="84" cy="58" r="9"/>
+    </g>
+    <g fill="#FFFFFF">
+      <circle cx="43" cy="54" r="3"/>
+      <circle cx="87" cy="54" r="3"/>
+    </g>
+    <circle cx="60" cy="72" r="2.6" fill="none" stroke="#3B2A22" stroke-width="1.8"/>
+    <g fill="none" stroke="#FF8A5C" stroke-width="2.4" stroke-linecap="round">
+      <path d="M60 24 L60 12"/>
+      <circle cx="60" cy="9" r="3.5" fill="#FFD2BF"/>
+    </g>
+  </g>
+
+  <!-- 已连接：睁眼、ω 嘴、天线亮起 -->
+  <g transform="translate(250 18)">
+    <title>已连接：天线亮起</title>
+    <use href="#cat-base"/>
+    <use href="#eyes-open"/>
+    <use href="#mouth-w"/>
+    <g fill="none" stroke="#FF8A5C" stroke-width="2.4" stroke-linecap="round">
+      <path d="M60 24 L60 12"/>
+      <circle cx="60" cy="9" r="3.5" fill="#FF8A5C"/>
+      <path d="M50 6 Q46 9 50 13"/>
+      <path d="M70 6 Q74 9 70 13"/>
+    </g>
+  </g>
+
+  <!-- 出错：皱眉、委屈嘴、泪滴 -->
+  <g transform="translate(375 18)">
+    <title>出错：委屈</title>
+    <use href="#cat-base"/>
+    <g fill="none" stroke="#3B2A22" stroke-width="2.4" stroke-linecap="round">
+      <path d="M30 52 L42 58 L30 64"/>
+      <path d="M90 52 L78 58 L90 64"/>
+      <path d="M55 74 Q60 70 65 74"/>
+    </g>
+    <path d="M94 62 Q98 70 94 73 Q90 70 94 62 Z" fill="#9FD3FF"/>
+  </g>
+</svg>
