@@ -141,6 +141,28 @@ $env:CARGO_TARGET_DIR = $TargetDir
 New-Item -ItemType Directory -Force $TargetDir | Out-Null
 New-Item -ItemType Directory -Force $OutRoot | Out-Null
 
+# The windows-gnu host linker's bundled dlltool needs GNU as, which is not
+# shipped. NDK's llvm-dlltool is a compatible drop-in.
+try {
+    Push-Location $Src
+    $hostTriple = ((& rustc -vV) | Select-String "^host:").ToString().Split(":")[1].Trim()
+    Pop-Location
+    if ($hostTriple -match "windows-gnu") {
+        $ndkBin = Get-ChildItem (Join-Path $Ndk "toolchains/llvm/prebuilt") -Directory |
+            ForEach-Object { Join-Path $_.FullName "bin" } | Where-Object { Test-Path $_ } |
+            Select-Object -First 1
+        $llvmDlltool = Join-Path $ndkBin "llvm-dlltool.exe"
+        if (Test-Path $llvmDlltool) {
+            $shimDir = Join-Path $TargetDir "host-bin"
+            New-Item -ItemType Directory -Force $shimDir | Out-Null
+            Copy-Item $llvmDlltool (Join-Path $shimDir "dlltool.exe") -Force
+            $env:PATH = "$shimDir;$env:PATH"
+        }
+    }
+} catch {
+    Write-Warning "Could not prepare dlltool shim: $_"
+}
+
 $Crates = @(
     "easytier-contrib/easytier-ffi",
     "easytier-contrib/easytier-android-jni"
