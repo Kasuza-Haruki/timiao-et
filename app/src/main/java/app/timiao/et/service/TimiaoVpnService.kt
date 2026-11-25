@@ -74,6 +74,7 @@ class TimiaoVpnService : VpnService() {
         }
         scope.launch {
             engine.status.collectLatest { map ->
+                app.timiao.et.widget.TimiaoWidget.refresh(this@TimiaoVpnService)
                 val live = map.filterValues {
                     it.state == LinkState.Connected || it.state == LinkState.Connecting
                 }
@@ -90,7 +91,6 @@ class TimiaoVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        commandSeen = true
         Log.i(TAG, "command ${intent?.action} id=${intent?.getStringExtra(EXTRA_ID)} active=${synchronized(activeIds) { activeIds.toList() }}")
         when (intent?.action) {
             ACTION_START -> intent.getStringExtra(EXTRA_ID)?.let { id ->
@@ -102,6 +102,8 @@ class TimiaoVpnService : VpnService() {
                     return START_NOT_STICKY
                 }
                 synchronized(activeIds) { activeIds += id }
+                // After the id is registered: the collector must never see "command seen, nothing active".
+                commandSeen = true
                 ServiceState.setLast(this, id)
                 scope.launch {
                     runCatching { engine.start(id) }

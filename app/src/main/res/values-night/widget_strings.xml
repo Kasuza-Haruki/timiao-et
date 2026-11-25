@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark variants of the widget colours (strings stay in values/widget_strings.xml). -->
+<resources>
+    <color name="widget_bg_start">#CC1B1622</color>
+    <color name="widget_bg_end">#A61B1622</color>
+    <color name="widget_bg_stroke">#40FFFFFF</color>
+    <color name="widget_mascot_bg">#26FFB08F</color>
+    <color name="widget_mascot_stroke">#40FFB08F</color>
+    <color name="widget_text">#F3EBE4</color>
+    <color name="widget_muted">#A99C92</color>
+    <color name="widget_ok">#7CD9A8</color>
+    <color name="widget_warn">#F0B56A</color>
+    <color name="widget_switch_track">#FFB08F</color>
+    <color name="widget_switch_off">#33FFFFFF</color>
+    <color name="widget_switch_stroke">#40FFFFFF</color>
+</resources>

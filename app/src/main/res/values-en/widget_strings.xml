@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_label">Timiao connection</string>
+    <string name="widget_description">Connect or disconnect Timiao quickly</string>
+    <string name="widget_not_connected">Not connected</string>
+    <string name="widget_connecting">Connecting</string>
+    <string name="widget_reconnecting">Reconnecting</string>
+    <string name="widget_connected_nodes">Connected · %1$d nodes</string>
+    <string name="widget_no_network">No network</string>
+    <string name="widget_switch_desc_connect">Connect to the last network</string>
+    <string name="widget_switch_desc_disconnect">Disconnect</string>
+    <string name="widget_preview_name">home-mesh</string>
+    <string name="widget_preview_status">Connected · 3 nodes</string>
+    <string name="widget_preview_ip">10.126.126.5</string>
+</resources>
