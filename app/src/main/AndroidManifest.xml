@@ -124,6 +124,19 @@
         <receiver
             android:name=".auto.AutoEventReceiver"
             android:exported="false" />
+
+        <!-- Home-screen connection widget. -->
+        <receiver
+            android:name=".widget.TimiaoWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
     </application>
 
     <!-- Launcher apps only; avoids the broad QUERY_ALL_PACKAGES permission. -->

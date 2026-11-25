@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- All home-screen widget text lives here so it can be translated as one unit. -->
+<resources>
+    <string name="widget_label">缇喵连接</string>
+    <string name="widget_description">快速连接或断开缇喵网络</string>
+    <string name="widget_not_connected">未连接</string>
+    <string name="widget_connecting">连接中</string>
+    <string name="widget_reconnecting">正在重连</string>
+    <string name="widget_connected_nodes">已连接 · %1$d 节点</string>
+    <string name="widget_no_network">未选择网络</string>
+    <string name="widget_switch_desc_connect">连接到上次的网络</string>
+    <string name="widget_switch_desc_disconnect">断开连接</string>
+    <string name="widget_preview_name">home-mesh</string>
+    <string name="widget_preview_status">已连接 · 3 节点</string>
+    <string name="widget_preview_ip">10.126.126.5</string>
+
+    <!-- Glass card, light. -->
+    <color name="widget_bg_start">#D9FFFFFF</color>
+    <color name="widget_bg_end">#8CFFFFFF</color>
+    <color name="widget_bg_stroke">#80FFFFFF</color>
+    <!-- Mascot ring. -->
+    <color name="widget_mascot_bg">#33FFC6A8</color>
+    <color name="widget_mascot_stroke">#4DFF8A5C</color>
+    <!-- Text and state. -->
+    <color name="widget_text">#3A2C24</color>
+    <color name="widget_muted">#8A776B</color>
+    <color name="widget_ok">#2FA36B</color>
+    <color name="widget_warn">#E08A2E</color>
+    <!-- Switch. -->
+    <color name="widget_switch_track">#FF8A5C</color>
+    <color name="widget_switch_off">#267A6A5E</color>
+    <color name="widget_switch_stroke">#1A7A6A5E</color>
+</resources>
