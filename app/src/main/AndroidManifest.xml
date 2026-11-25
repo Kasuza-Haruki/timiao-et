@@ -98,4 +98,12 @@
         </service>
     </application>
 
+    <!-- Launcher apps only; avoids the broad QUERY_ALL_PACKAGES permission. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
 </manifest>

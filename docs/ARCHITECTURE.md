@@ -43,3 +43,21 @@ UI depends only on these interfaces. Provide `FakeEngine` + `FakeConfigRepositor
 - NEVER commit secrets. The real network_secret lives only in testdata/ (git-ignored). Never print it.
 - Real-connection tests run only inside the emulator, with a NEW hostname and NO instance_id (do not reuse the phone's id).
 - Commit small, on branch `feat/<your-owner-name>`; do not push anywhere.
+
+---
+# Phase 2/3 contract (added after phase 1 shipped)
+
+Shared facts learned in phase 1 (do not re-learn them):
+- Build: `${ANDROID_ENV}\gradle-8.11.1\bin\gradle.bat` (wrapper downloads time out). JAVA_HOME=${ANDROID_ENV}\jdk17, ANDROID_HOME=${ANDROID_ENV}\android-sdk. In Git Bash set MSYS_NO_PATHCONV=1 for adb paths.
+- ALWAYS check the APK timestamp after a build. Filter errors with `grep -E "^e:|FAIL"`, never hide a failed build.
+- Emulator: AVD `et_test` (start: `emulator -avd et_test -no-snapshot-save -no-audio` in background). adb = ${ANDROID_ENV}\android-sdk\platform-tools\adb.exe.
+- Debug-only hook: `DebugReceiver` (DEBUG_IMPORT/START/STOP/DUMP). Test config: testdata/emu.toml (git-ignored, real secret, never print or commit).
+- Real network: hostnames relay-1 (server), desktop-a (user's PC, direct), Phone. From emulator `ping 10.126.126.1/.2` works when connected.
+- After disconnect `tun0` must disappear and the foreground service must stop. Regression-check this whenever service code changes.
+- Kernel facts: v2.7.1 setTunFd supports multiple instances on one shared TUN; deleting an instance does not close the TUN fd (service closes it itself, see TimiaoVpnService.releaseKernelFd).
+- NEVER touch the host's easytier (${LOCAL_EASYTIER}, process easytier-gui). Never print secrets. No pushes (the main agent pushes).
+- Dark mode must be checked on every UI change (`adb shell cmd uimode night yes|no`).
+- Motion: any selector uses one sliding pill driven by a spring (see GlassDock / SegmentedGlass). No colour-fade-only selectors.
+
+Phase 2 features: per-app split tunnelling, auto-connect rules (boot, Wi-Fi SSID / mobile data), one-tap diagnostics, home-screen widget, multi-network on one TUN.
+Phase 3 features: QR scan/share config, copy/launch actions on peers (ssh/rdp via installed apps), traffic limit on mobile data, battery/traffic stats, app + kernel update check (kernel tag shown in About, app self-update from GitHub releases), English UI (strings.xml en) + working language switch.

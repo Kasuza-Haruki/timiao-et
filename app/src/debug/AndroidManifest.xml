@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <!-- Debug-only diagnostics preview; not part of release builds. -->
+        <activity
+            android:name="app.timiao.et.debug.DiagnosticsDebugActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Timiao" />
         <!-- Debug only: lets adb import a TOML file and start a network. Not part of release builds. -->
         <receiver
             android:name="app.timiao.et.debug.DebugReceiver"
@@ -10,6 +15,9 @@
                 <action android:name="app.timiao.et.DEBUG_START" />
                 <action android:name="app.timiao.et.DEBUG_STOP" />
                 <action android:name="app.timiao.et.DEBUG_DUMP" />
+                <action android:name="app.timiao.et.DEBUG_SPLIT" />
+                <action android:name="app.timiao.et.DEBUG_LIST" />
+                <action android:name="app.timiao.et.DEBUG_PREPARE" />
             </intent-filter>
         </receiver>
 
