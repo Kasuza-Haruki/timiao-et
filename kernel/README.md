@@ -60,8 +60,11 @@ segment is aligned to `0x4000` for Android 15 16 KB pages.
 
 | ABI | libeasytier_android_jni.so | NEEDED (JNI) | LOAD align |
 |---|---|---|---|
-| x86_64 | 20,491,640 bytes | liblog, libdl, libm, libc | 0x4000 |
-| arm64-v8a | 18,122,544 bytes | liblog, libdl, libm, libc | 0x4000 |
+| x86_64 | 20,479,224 bytes | liblog, libdl, libm, libc | 0x4000 |
+| arm64-v8a | 18,110,896 bytes | liblog, libdl, libm, libc | 0x4000 |
+
+Both ABIs were rebuilt from v2.7.1 with `0001` and `0002` APPLIED on
+2026-11-26.
 
 The JNI library does not list `libeasytier_ffi.so` in `NEEDED`; FFI code is
 linked statically. Cargo also produces a separate `libeasytier_ffi.so` in the
