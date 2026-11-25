@@ -101,7 +101,7 @@ class TimiaoVpnService : VpnService() {
         merged.routes.forEach { b.addRoute(it.network, it.prefix) }
         merged.dns.forEach { b.addDnsServer(it) }
         if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
-        applyAppFilter(b, SplitStore.policy(this, SplitStore.GLOBAL_ID))
+        applyAppFilter(b, SplitStore.policy(this, SplitStore.GLOBAL_ID), packageName)
         val pfd = b.establish() ?: error("VPN permission was revoked")
         return pfd.detachFd()
     }
