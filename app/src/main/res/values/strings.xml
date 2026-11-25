@@ -52,6 +52,7 @@
     <string name="home_current_network_server">当前网络 · %1$s</string>
     <string name="home_unnamed_network">未命名网络</string>
     <string name="home_no_networks">还没有网络。</string>
+    <string name="home_empty_title">还没有网络</string>
     <string name="home_create_network">创建网络</string>
     <string name="home_virtual_ip">虚拟 IP</string>
     <string name="home_node_info">本机信息</string>

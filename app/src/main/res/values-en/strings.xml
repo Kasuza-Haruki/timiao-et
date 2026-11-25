@@ -52,6 +52,7 @@
     <string name="home_current_network_server">Current network · %1$s</string>
     <string name="home_unnamed_network">Unnamed network</string>
     <string name="home_no_networks">No networks yet.</string>
+    <string name="home_empty_title">No networks yet</string>
     <string name="home_create_network">Create network</string>
     <string name="home_virtual_ip">Virtual IP</string>
     <string name="home_node_info">This device</string>

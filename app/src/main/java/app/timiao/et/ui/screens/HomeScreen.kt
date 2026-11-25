@@ -66,8 +66,10 @@ fun HomeScreen(
     val g = LocalGlassColors.current
     val unnamedNetwork = stringResource(R.string.home_unnamed_network)
 
+    val hasNetwork = active != null
     val reconnecting = status.reconnecting
     val statusTitle = when {
+        !hasNetwork -> stringResource(R.string.home_empty_title)
         reconnecting -> stringResource(R.string.home_status_reconnecting)
         status.state == LinkState.Idle -> stringResource(R.string.home_status_idle)
         status.state == LinkState.Connecting -> stringResource(R.string.home_status_connecting)
@@ -75,15 +77,15 @@ fun HomeScreen(
         else -> stringResource(R.string.home_status_error)
     }
     val statusSub = when {
+        !hasNetwork -> ""
         reconnecting -> stringResource(R.string.home_sub_reconnecting)
-        status.state == LinkState.Idle ->
-            if (active == null) stringResource(R.string.home_sub_no_network) else stringResource(R.string.home_sub_idle)
+        status.state == LinkState.Idle -> stringResource(R.string.home_sub_idle)
         status.state == LinkState.Connecting -> stringResource(R.string.home_sub_connecting)
         status.state == LinkState.Connected ->
             "${status.myIpv4 ?: "—"} · ${formatUptime(status.uptimeSec)}"
         else -> status.error ?: stringResource(R.string.home_sub_error)
     }
-    val buttonText = when {
+    val buttonText = if (!hasNetwork) stringResource(R.string.home_create_network) else when {
         reconnecting -> stringResource(R.string.home_btn_disconnect)
         status.state == LinkState.Idle -> stringResource(R.string.home_btn_connect)
         status.state == LinkState.Connecting -> stringResource(R.string.home_btn_cancel)
@@ -109,8 +111,8 @@ fun HomeScreen(
             )
         }
 
-        item {
-            if (active != null) {
+        if (active != null) {
+            item {
                 val server = active!!.servers.firstOrNull().orEmpty()
                 GlassDropdownRow(
                     label = if (server.isBlank()) stringResource(R.string.home_current_network) else stringResource(R.string.home_current_network_server, server),
@@ -119,12 +121,6 @@ fun HomeScreen(
                     optionLabel = { it.name.ifBlank { unnamedNetwork } },
                     onSelect = { vm.selectNetwork(it.id) },
                     enabled = networks.size > 1,
-                )
-            } else {
-                EmptyGlassCard(
-                    text = stringResource(R.string.home_no_networks),
-                    actionText = stringResource(R.string.home_create_network),
-                    onAction = { onNavigate("networks") },
                 )
             }
         }
@@ -151,18 +147,23 @@ fun HomeScreen(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = statusSub,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                    color = g.muted,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (statusSub.isNotEmpty()) {
+                    Text(
+                        text = statusSub,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                        color = g.muted,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
                 PillButton(
                     text = buttonText,
-                    onClick = { vm.toggleActiveNetwork() },
-                    enabled = active != null,
+                    onClick = {
+                        if (active == null) onNavigate(Routes.NETWORKS)
+                        else vm.toggleActiveNetwork()
+                    },
+                    enabled = true,
                 )
             }
         }
