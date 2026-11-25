@@ -108,7 +108,6 @@ class TimiaoVpnService : VpnService() {
     /** Closes the TUN fd only if that number still points at /dev/tun, so a reused fd is never touched. */
     private fun releaseKernelFd() {
         val fd = kernelFd
-        Log.i(TAG, "releaseKernelFd fd=$fd target=${if (fd >= 0) runCatching { android.system.Os.readlink("/proc/self/fd/$fd") }.getOrElse { "ERR ${it.message}" } else "-"}")
         if (fd < 0) return
         kernelFd = -1
         val target = runCatching { android.system.Os.readlink("/proc/self/fd/$fd") }.getOrNull()
