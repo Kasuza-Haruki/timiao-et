@@ -5,7 +5,9 @@ This directory pins and builds the EasyTier native kernel used by the app.
 - Upstream: <https://github.com/EasyTier/EasyTier>
 - Pinned tag: see [`UPSTREAM_TAG`](UPSTREAM_TAG) (currently `v2.7.1`)
 - Source checkout: `kernel/src/` (git-ignored, shallow clone)
-- Build output: `kernel/out/<abi>/` and `app/src/main/jniLibs/<abi>/`
+- Build output: only `libeasytier_android_jni.so`, in `kernel/out/<abi>/` and
+  `app/src/main/jniLibs/<abi>/`. `libeasytier_ffi.so` is not shipped; its code
+  is linked statically into the JNI library.
 - License: LGPL-3.0, see [`LICENSE-NOTICE.md`](LICENSE-NOTICE.md)
 
 ## Build
@@ -29,11 +31,14 @@ Both scripts:
    `EASYTIER_LOCAL_SRC` (defaults to an existing
    `D:\extra\research\easytier-src` on Windows) is used as a local mirror to
    speed up cloning.
-2. Apply every `kernel/patches/*.patch` in filename order with `git apply`.
+2. Try every `kernel/patches/*.patch` in filename order with `git apply
+   --check`. A patch is applied only when the check passes. Failures are
+   recorded in `kernel/out/PATCH_STATUS.txt` (`<name>: APPLIED` or
+   `<name>: FAILED`) and do not stop the build.
 3. Run `cargo ndk -t <abi> --platform 26 build --release` for
    `easytier-contrib/easytier-ffi` and `easytier-contrib/easytier-android-jni`.
-4. Copy `libeasytier_android_jni.so` (and `libeasytier_ffi.so` when produced)
-   to `kernel/out/<abi>/` and `app/src/main/jniLibs/<abi>/`.
+4. Copy only `libeasytier_android_jni.so` to `kernel/out/<abi>/` and
+   `app/src/main/jniLibs/<abi>/`, and remove any stale `libeasytier_ffi.so`.
 5. Print size, `NEEDED` entries, and 16 KB LOAD alignment.
 
 Requirements: Rust 1.95 (from upstream `rust-toolchain.toml`), `cargo-ndk`,
@@ -53,19 +58,48 @@ segment is aligned to `0x4000` for Android 15 16 KB pages.
 
 ### Verified build (v2.7.1)
 
-| ABI | libeasytier_android_jni.so | libeasytier_ffi.so | NEEDED (JNI) | LOAD align |
-|---|---|---|---|---|
-| x86_64 | 20,491,640 bytes | 19,986,264 bytes | liblog, libdl, libm, libc | 0x4000 |
-| arm64-v8a | 18,122,544 bytes | 17,381,096 bytes | liblog, libdl, libm, libc | 0x4000 |
+| ABI | libeasytier_android_jni.so | NEEDED (JNI) | LOAD align |
+|---|---|---|---|
+| x86_64 | 20,491,640 bytes | liblog, libdl, libm, libc | 0x4000 |
+| arm64-v8a | 18,122,544 bytes | liblog, libdl, libm, libc | 0x4000 |
 
 The JNI library does not list `libeasytier_ffi.so` in `NEEDED`; FFI code is
-linked statically. The separate `libeasytier_ffi.so` is only for C ABI users.
+linked statically. Cargo also produces a separate `libeasytier_ffi.so` in the
+target directory, but the build scripts do not copy it to `kernel/out` or
+`jniLibs`, because the app never loads it.
 
 ## Patch policy
 
-Patches live in `kernel/patches/*.patch`, numbered by application order. The
-build fails if a patch no longer applies, so an upstream update cannot silently
-drop a local fix. Re-validate patches on every upstream bump.
+Patches live in `kernel/patches/*.patch`, numbered by application order. Both
+build scripts reset `kernel/src` to the pinned tag, then try every patch in
+filename order with `git apply --check`. Only patches that pass are applied.
+Failures do not stop the build; each result is written to
+`kernel/out/PATCH_STATUS.txt` and printed as a warning.
+
+The two current patches are independent fallbacks for the network-secret leak:
+
+- `0001-android-jni-log-info.patch` changes only
+  `easytier-contrib/easytier-android-jni/src/logger.rs`
+  (`LevelFilter::Debug` -> `LevelFilter::Info`). This file is small and rarely
+  changes. This patch alone suppresses the debug-level route log that leaked
+  the secret.
+- `0002-network-identity-debug-redact.patch` replaces the `Debug` derive on
+  `NetworkIdentity` (core and TOML config) with a handwritten `Debug` that
+  prints `Some("***")` for `network_secret` and `network_secret_digest`. This
+  redacts the secret at every log level, including `Info`, `Warn` and `Error`.
+
+Failure handling:
+
+- If only `0001` applies, `Info` still drops the debug log that caused the
+  measured leak. If only `0002` applies, the structure is redacted at any
+  level. Each patch is a fallback for the other.
+- If both fail, the native library can write the secret to logcat again. The
+  app cannot filter logcat output written directly by the native library.
+  Treat this as a security regression and rebase the patches before shipping.
+- The upstream-tracking workflow still builds and opens a PR when a patch
+  fails. The PR title gets `[patch needs rebase]`, the body lists failed
+  patches, and the workflow opens or updates an issue. The workflow does not
+  fail because of a patch failure.
 
 ## Does v2.7.1 need an `attachMobileTunFd` patch?
 
@@ -128,6 +162,9 @@ before loading it. The JNI `.so` does not require the separate FFI `.so` when
 
 `.github/workflows/track-upstream.yml` runs daily and on demand. It resolves the
 latest stable GitHub release (prereleases ignored unless requested), compares it
-with `kernel/UPSTREAM_TAG`, builds all four ABIs with NDK 27, applies patches,
-checks the `runNetworkInstance` export and `0x4000` LOAD alignment, and then
-opens a PR that updates `UPSTREAM_TAG`. A failed build does not update the tag.
+with `kernel/UPSTREAM_TAG`, builds all four ABIs with NDK 27, applies patches on
+a best-effort basis, checks the `runNetworkInstance` export and `0x4000` LOAD
+alignment, and then opens a PR that updates `UPSTREAM_TAG`. A failed build does
+not update the tag. A patch that no longer applies does not fail the workflow:
+the PR still opens with `[patch needs rebase]` in the title, the failed patch
+names go into the body, and an issue is opened or updated for manual rebase.

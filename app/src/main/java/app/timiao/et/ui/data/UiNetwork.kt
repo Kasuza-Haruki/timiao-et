@@ -254,13 +254,16 @@ fun splitHostPort(value: String): Pair<String, String> {
         }
     }
     val colon = text.lastIndexOf(':')
-    if (colon <= 0 || text.indexOf(':') != colon) return text to ""
+    // A leading colon means "empty host, port only" (e.g. ":80"). Multiple
+    // colons without brackets are an IPv6 address, not host:port.
+    if (colon < 0 || text.indexOf(':') != colon) return text to ""
     return text.substring(0, colon) to text.substring(colon + 1)
 }
 
 fun joinHostPort(host: String, port: String): String {
     val h = host.trim()
     val p = port.trim()
+    if (p.isEmpty()) return if (h.contains(':') && !h.startsWith("[")) "[$h]" else h
     return if (h.contains(':') && !h.startsWith("[")) "[$h]:$p" else "$h:$p"
 }
 

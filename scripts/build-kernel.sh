@@ -67,13 +67,35 @@ git -C "$SRC" clean -fd -e target
 
 echo "EasyTier source: $SRC @ $(git -C "$SRC" rev-parse --short HEAD) ($TAG)"
 
+# Patches are best effort: a patch that no longer applies must not block the
+# build. Record its status in kernel/out/PATCH_STATUS.txt and keep going.
+mkdir -p "$OUT_ROOT"
+PATCH_STATUS_FILE="$OUT_ROOT/PATCH_STATUS.txt"
+: > "$PATCH_STATUS_FILE"
+patch_failed=0
 if [[ -d "$PATCH_DIR" ]]; then
   while IFS= read -r patch; do
     [[ -z "$patch" ]] && continue
-    echo "Applying patch $(basename "$patch")"
-    git -C "$SRC" apply --check "$patch"
-    git -C "$SRC" apply "$patch"
+    name="$(basename "$patch")"
+    if git -C "$SRC" apply --check "$patch"; then
+      if git -C "$SRC" apply "$patch"; then
+        echo "Applied patch $name"
+        echo "$name: APPLIED" >> "$PATCH_STATUS_FILE"
+      else
+        echo "WARNING: PATCH APPLY FAILED: $name. Continuing without it." >&2
+        echo "$name: FAILED" >> "$PATCH_STATUS_FILE"
+        patch_failed=1
+      fi
+    else
+      echo "WARNING: PATCH NOT APPLICABLE: $name (upstream changed?). Continuing without it." >&2
+      echo "$name: FAILED" >> "$PATCH_STATUS_FILE"
+      patch_failed=1
+    fi
   done < <(find "$PATCH_DIR" -maxdepth 1 -name '*.patch' | sort)
+fi
+if [[ "$patch_failed" -eq 1 ]]; then
+  echo "WARNING: some patches were not applied; the build continues without them." >&2
+  echo "WARNING: patch status: $PATCH_STATUS_FILE" >&2
 fi
 
 # Optional crates.io source replacement for slow networks.
@@ -177,11 +199,15 @@ for abi in "${ABI_LIST[@]}"; do
   out_dir="$OUT_ROOT/$abi"
   mkdir -p "$out_dir"
   cp -f "$jni_so" "$out_dir/"
-  [[ -f "$release_dir/libeasytier_ffi.so" ]] && cp -f "$release_dir/libeasytier_ffi.so" "$out_dir/"
+  # easytier-ffi is linked statically into the JNI library. The separate
+  # libeasytier_ffi.so is never loaded by the app, so keep it out of the
+  # shipped output and remove any stale copy from an earlier build.
+  rm -f "$out_dir/libeasytier_ffi.so"
 
   if [[ "$COPY_JNI_LIBS" -eq 1 ]]; then
     mkdir -p "$JNI_LIBS_ROOT/$abi"
-    cp -f "$out_dir"/*.so "$JNI_LIBS_ROOT/$abi/"
+    cp -f "$jni_so" "$JNI_LIBS_ROOT/$abi/"
+    rm -f "$JNI_LIBS_ROOT/$abi/libeasytier_ffi.so"
   fi
 
   size=$(wc -c < "$jni_so" | tr -d ' ')

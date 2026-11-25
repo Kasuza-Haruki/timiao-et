@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -36,8 +38,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -167,6 +173,9 @@ fun NetworkEditScreen(
     var initialForm by remember(networkId) { mutableStateOf<UiNetwork?>(null) }
     var texts by remember(networkId) { mutableStateOf(Texts()) }
     var initialTexts by remember(networkId) { mutableStateOf(Texts()) }
+    val secretFocus = remember(networkId) { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    var secretFocusDone by rememberSaveable(networkId) { mutableStateOf(false) }
 
     LaunchedEffect(networkId, networks) {
         if (form == null) {
@@ -507,15 +516,20 @@ fun NetworkEditScreen(
                 )
             }
             item {
-                Field(
-                    label = "网络密钥",
+                SecretField(
                     value = form!!.secret,
                     onChange = { form = form!!.copy(secret = it) },
-                    placeholder = "留空表示无密钥",
-                    mono = true,
-                    visualTransformation = PasswordVisualTransformation(),
                     focus = focus,
+                    focusRequester = secretFocus,
                 )
+                // A link/file without a secret opens here with the field ready to type.
+                LaunchedEffect(Unit) {
+                    if (openAction == "secret" && !secretFocusDone) {
+                        secretFocusDone = true
+                        runCatching { secretFocus.requestFocus() }
+                        keyboard?.show()
+                    }
+                }
             }
             item {
                 Field(
@@ -1707,6 +1721,57 @@ private fun InlineError(text: String?) {
         style = MaterialTheme.typography.labelSmall,
         modifier = Modifier.padding(horizontal = 14.dp, vertical = 1.dp),
     )
+}
+
+/**
+ * Network secret input. A local copy of GlassTextField (the shared component cannot
+ * take a FocusRequester) so an import without a secret can focus this field.
+ */
+@Composable
+private fun SecretField(
+    value: String,
+    onChange: (String) -> Unit,
+    focus: androidx.compose.ui.focus.FocusManager,
+    focusRequester: FocusRequester,
+) {
+    val g = LocalGlassColors.current
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .glass(RoundedCornerShape(18.dp), GlassLevel.Subtle)
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+    ) {
+        Text("网络密钥", style = MaterialTheme.typography.labelSmall, color = g.muted)
+        BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 24.dp)
+                .focusRequester(focusRequester),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurface,
+                fontFamily = FontFamily.Monospace,
+            ),
+            singleLine = true,
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+            keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
+            visualTransformation = PasswordVisualTransformation(),
+            decorationBox = { inner ->
+                Box {
+                    if (value.isEmpty()) {
+                        Text(
+                            "留空表示无密钥",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = g.muted.copy(alpha = 0.7f),
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+    }
 }
 
 @Composable

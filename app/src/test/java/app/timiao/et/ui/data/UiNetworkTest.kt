@@ -132,6 +132,28 @@ class UiNetworkTest {
     }
 
     @Test
+    fun portForwardDraftSurvivesPortFirstAndClearing() {
+        // Port typed before the host: the host must stay empty, not ":80".
+        val portFirst = PortForwardDraft("tcp", "", "8080", "", "80").toPortForward()
+        assertEquals(":8080", portFirst.bindAddr)
+        assertEquals(":80", portFirst.dstAddr)
+        val draft = portFirst.toDraft()
+        assertEquals("", draft.bindIp)
+        assertEquals("8080", draft.bindPort)
+        assertEquals("", draft.dstIp)
+        assertEquals("80", draft.dstPort)
+
+        // Clearing a host must not round-trip a colon back into the field.
+        val cleared = PortForwardDraft("tcp", "", "", "", "").toPortForward()
+        assertEquals("", cleared.bindAddr)
+        assertEquals("", cleared.dstAddr)
+        assertEquals(PortForwardDraft("tcp", "", "", "", ""), cleared.toDraft())
+        assertEquals("" to "", splitHostPort(":"))
+        assertEquals("" to "80", splitHostPort(":80"))
+        assertEquals("10.0.0.1" to "", splitHostPort("10.0.0.1:"))
+    }
+
+    @Test
     fun proxyNetworkParsesOfficialSyntax() {
         assertEquals("192.168.1.0/24" to null, parseProxyNetwork("192.168.1.0/24")?.let { it.cidr to it.mappedCidr })
         val mapped = parseProxyNetwork("192.168.1.0/24->10.9.0.0/24")

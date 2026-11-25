@@ -1,0 +1,19 @@
+# kernel/patches/0001-android-jni-log-info.patch
+# Target: EasyTier v2.7.1
+# File: easytier-contrib/easytier-android-jni/src/logger.rs
+# Purpose: stop debug-level native logs, including the route log that wrote
+#   network_secret to logcat.
+# Rebase: this file rarely changes. In android_logger::Config::default(),
+#   keep with_max_level at Info or stricter (Warn/Error).
+#
+--- a/easytier-contrib/easytier-android-jni/src/logger.rs
++++ b/easytier-contrib/easytier-android-jni/src/logger.rs
+@@ -3,7 +3,7 @@
+ static LOGGER_INIT: Lazy<()> = Lazy::new(|| {
+     android_logger::init_once(
+         android_logger::Config::default()
+-            .with_max_level(log::LevelFilter::Debug)
++            .with_max_level(log::LevelFilter::Info)
+             .with_tag("EasyTier-JNI"),
+     );
+ });

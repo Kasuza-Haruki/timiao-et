@@ -1,0 +1,75 @@
+# kernel/patches/0002-network-identity-debug-redact.patch
+# Target: EasyTier v2.7.1
+# Files: easytier-core/src/config/mod.rs, easytier-core/src/config/toml.rs
+# Purpose: redact network_secret and network_secret_digest in Debug output.
+# Rebase: find each `pub struct NetworkIdentity` and its derive line. Remove
+#   `Debug` from that derive, then add the handwritten impl shown here. Keep
+#   network_secret as Some("***")/None and network_secret_digest as
+#   Some("***")/None. Never print either value. If upstream removed the TOML
+#   duplicate, drop the toml.rs hunk.
+#
+--- a/easytier-core/src/config/mod.rs
++++ b/easytier-core/src/config/mod.rs
+@@ -138,11 +138,28 @@
+     Ok(config_broken)
+ }
+ 
+-#[derive(Debug, Clone, Serialize, Deserialize)]
++#[derive(Clone, Serialize, Deserialize)]
+ pub struct NetworkIdentity {
+     pub network_name: String,
+     pub network_secret: Option<String>,
+     pub network_secret_digest: Option<NetworkSecretDigest>,
++}
++
++impl std::fmt::Debug for NetworkIdentity {
++    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        formatter
++            .debug_struct("NetworkIdentity")
++            .field("network_name", &self.network_name)
++            .field(
++                "network_secret",
++                &self.network_secret.as_ref().map(|_| "***"),
++            )
++            .field(
++                "network_secret_digest",
++                &self.network_secret_digest.as_ref().map(|_| "***"),
++            )
++            .finish()
++    }
+ }
+ 
+ impl NetworkIdentity {
+--- a/easytier-core/src/config/toml.rs
++++ b/easytier-core/src/config/toml.rs
+@@ -179,12 +179,29 @@
+ 
+ use super::NetworkSecretDigest;
+ 
+-#[derive(Debug, Clone, Deserialize, Serialize)]
++#[derive(Clone, Deserialize, Serialize)]
+ pub struct NetworkIdentity {
+     pub network_name: String,
+     pub network_secret: Option<String>,
+     #[serde(skip)]
+     pub network_secret_digest: Option<NetworkSecretDigest>,
++}
++
++impl std::fmt::Debug for NetworkIdentity {
++    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        formatter
++            .debug_struct("NetworkIdentity")
++            .field("network_name", &self.network_name)
++            .field(
++                "network_secret",
++                &self.network_secret.as_ref().map(|_| "***"),
++            )
++            .field(
++                "network_secret_digest",
++                &self.network_secret_digest.as_ref().map(|_| "***"),
++            )
++            .finish()
++    }
+ }
+ 
+ impl From<super::NetworkIdentity> for NetworkIdentity {

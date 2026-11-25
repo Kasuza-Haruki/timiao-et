@@ -18,6 +18,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 concurrency:
   group: track-upstream
@@ -103,6 +104,10 @@ jobs:
           "${SDK}/cmdline-tools/latest/bin/sdkmanager" "ndk;${NDK_VERSION}"
           echo "ANDROID_NDK_HOME=${SDK}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
+      # build-kernel.sh applies kernel/patches/*.patch in filename order on a
+      # best-effort basis: only patches that pass `git apply --check` are
+      # applied. Failures are recorded in kernel/out/PATCH_STATUS.txt and do not
+      # fail this job, so the PR below still opens (marked for manual rebase).
       - name: Build all ABIs
         env:
           EASYTIER_PROXY: ""
@@ -114,6 +119,38 @@ jobs:
             --tag "${{ needs.check.outputs.tag }}" \
             --abis "arm64-v8a,armeabi-v7a,x86,x86_64" \
             --no-jni-libs
+
+      - name: Read patch status
+        id: patches
+        run: |
+          set -euo pipefail
+          status_file="kernel/out/PATCH_STATUS.txt"
+          applied=""
+          failed=""
+          if [[ -f "${status_file}" ]]; then
+            applied="$(awk -F': ' '$2 == "APPLIED" {print $1}' "${status_file}" | paste -sd ',' - | sed 's/,/, /g')"
+            failed="$(awk -F': ' '$2 == "FAILED" {print $1}' "${status_file}" | paste -sd ',' - | sed 's/,/, /g')"
+          fi
+          echo "applied=${applied}" >> "$GITHUB_OUTPUT"
+          echo "failed=${failed}" >> "$GITHUB_OUTPUT"
+          if [[ -n "${failed}" ]]; then
+            echo "::warning title=Patch needs rebase::${failed}"
+          else
+            echo "All kernel patches applied."
+          fi
+
+      - name: Compute PR title
+        id: pr_title
+        env:
+          FAILED: ${{ steps.patches.outputs.failed }}
+          TAG: ${{ needs.check.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${FAILED}" ]]; then
+            echo "title=kernel: update EasyTier to ${TAG} [patch needs rebase]" >> "$GITHUB_OUTPUT"
+          else
+            echo "title=kernel: update EasyTier to ${TAG}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Smoke check exports and 16 KB LOAD alignment
         run: |
@@ -144,9 +181,29 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: easytier-kernel-${{ needs.check.outputs.tag }}
-          path: kernel/out/**/*.so
+          path: |
+            kernel/out/**/*.so
+            kernel/out/PATCH_STATUS.txt
           if-no-files-found: error
           retention-days: 14
+
+      - name: Open or update patch rebase issue
+        if: steps.patches.outputs.failed != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FAILED: ${{ steps.patches.outputs.failed }}
+          TAG: ${{ needs.check.outputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="kernel: rebase kernel patch(es) for ${TAG}"
+          body="$(printf 'Patch(es) failed to apply to upstream %s:\n\n%s\n\nThe build continued without them. Rebase the patches in kernel/patches/ and verify, then close this issue.\nWorkflow run: %s\n' "${TAG}" "${FAILED}" "${RUN_URL}")"
+          existing="$(gh issue list --state open --limit 100 --json number,title --jq ".[] | select(.title == \"${title}\") | .number" | head -1)"
+          if [[ -n "${existing}" ]]; then
+            gh issue comment "${existing}" --body "${body}"
+          else
+            gh issue create --title "${title}" --body "${body}"
+          fi
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v7
@@ -155,7 +212,7 @@ jobs:
           base: main
           add-paths: kernel/UPSTREAM_TAG
           delete-branch: true
-          title: "kernel: update EasyTier to ${{ needs.check.outputs.tag }}"
+          title: ${{ steps.pr_title.outputs.title }}
           commit-message: "kernel: update EasyTier to ${{ needs.check.outputs.tag }}"
           body: |
             Automated tracking of the upstream EasyTier stable release.
@@ -163,9 +220,11 @@ jobs:
             - Previous tag: `${{ needs.check.outputs.current }}`
             - New tag: `${{ needs.check.outputs.tag }}`
             - ABIs built: arm64-v8a, armeabi-v7a, x86, x86_64
-            - Patches in `kernel/patches/` applied
+            - Patches applied: `${{ steps.patches.outputs.applied }}`
+            - Patches needing rebase: `${{ steps.patches.outputs.failed }}`
             - Smoke check passed: `Java_com_easytier_jni_EasyTierJNI_runNetworkInstance` exported
             - 16 KB page alignment verified: every LOAD segment reports `Align 0x4000`
 
-            Build artifacts are attached to this workflow run. Review `kernel/README.md`
-            for the patch policy before merging.
+            Build artifacts are attached to this workflow run. If a patch failed,
+            rebase it in `kernel/patches/` before merging. Review `kernel/README.md`
+            for the patch policy.
