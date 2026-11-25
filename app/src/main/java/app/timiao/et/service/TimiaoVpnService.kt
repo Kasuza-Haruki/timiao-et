@@ -16,9 +16,12 @@ import app.timiao.et.MainActivity
 import app.timiao.et.R
 import app.timiao.et.TimiaoApplication
 import app.timiao.et.core.LinkState
+import app.timiao.et.core.MergedTun
 import app.timiao.et.core.NetworkStatus
 import app.timiao.et.split.SplitStore
 import app.timiao.et.split.applyAppFilter
+import app.timiao.et.core.TunMerge
+import app.timiao.et.core.TunSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,10 +32,13 @@ import kotlinx.coroutines.launch
 /** Owns the Android TUN device and the foreground notification. */
 class TimiaoVpnService : VpnService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var tun: ParcelFileDescriptor? = null
+    private val fdsLock = Any()
 
-    /** fd number handed to the kernel. The kernel's shared NIC may keep it open after stop. */
+    /** fd number currently handed to the kernel. The kernel's shared NIC may keep it open after stop. */
     @Volatile private var kernelFd: Int = -1
+
+    /** Replaced fds kept open until the engine confirms every instance uses the new one. */
+    private val retiredFds = mutableListOf<Int>()
     private val activeIds = linkedSetOf<String>()
 
     private val engine get() = (application as TimiaoApplication).container.nativeEngine
@@ -80,38 +86,65 @@ class TimiaoVpnService : VpnService() {
         return START_NOT_STICKY
     }
 
-    /** Called by the engine once the address is known. Returns a detached fd owned by the native side. */
-    fun establishTun(addr: String, prefix: Int, routes: List<String>, mtu: Int): Int {
-        runCatching { tun?.close() }
-        tun = null
+    /**
+     * Builds one TUN that carries every running network. The previous fd stays open until the
+     * engine calls [adoptKernelFd] and then [releaseKernelFd] for it.
+     */
+    fun establishMergedTun(merged: MergedTun): Int {
+        require(merged.addresses.isNotEmpty()) { "TUN has no address" }
         val b = Builder()
             .setSession("Timiao")
             .setBlocking(false)
-            .setMtu(if (mtu in 576..9000) mtu else 1300)
-            .addAddress(addr, prefix)
-        b.addRoute(networkAddress(addr, prefix), prefix)
-        routes.forEach { cidr ->
-            val p = cidr.split('/')
-            runCatching { b.addRoute(p[0], p.getOrNull(1)?.toInt() ?: 32) }
-        }
-        applyAppFilter(b, SplitStore.policy(this, activeIds.lastOrNull() ?: ServiceState.last(this)))
+            .setMtu(merged.mtu)
+            .allowFamily(android.system.OsConstants.AF_INET6)
+        merged.addresses.forEach { b.addAddress(it.address, it.prefix) }
+        merged.routes.forEach { b.addRoute(it.network, it.prefix) }
+        merged.dns.forEach { b.addDnsServer(it) }
         if (Build.VERSION.SDK_INT >= 29) b.setMetered(false)
+        applyAppFilter(b, SplitStore.policy(this, SplitStore.GLOBAL_ID))
         val pfd = b.establish() ?: error("VPN permission was revoked")
-        tun = pfd
-        return pfd.detachFd().also { kernelFd = it }
+        return pfd.detachFd()
     }
 
-    private fun closeTun() {
-        runCatching { tun?.close() }
-        tun = null
-        releaseKernelFd()
-    }
+    /** Single-network entry point kept for the plain TunProvider API. */
+    fun establishTun(addr: String, prefix: Int, routes: List<String>, mtu: Int): Int =
+        establishMergedTun(TunMerge.merge(listOf(TunSpec("", addr, prefix, routes, mtu))))
 
-    /** Closes the TUN fd only if that number still points at /dev/tun, so a reused fd is never touched. */
-    private fun releaseKernelFd() {
-        val fd = kernelFd
+    fun adoptKernelFd(fd: Int) {
         if (fd < 0) return
-        kernelFd = -1
+        synchronized(fdsLock) {
+            if (kernelFd != fd) {
+                if (kernelFd >= 0) retiredFds += kernelFd
+                kernelFd = fd
+            }
+            retiredFds.remove(fd)
+        }
+    }
+
+    fun releaseKernelFd(fd: Int) {
+        synchronized(fdsLock) {
+            if (kernelFd == fd) kernelFd = -1
+            retiredFds.remove(fd)
+        }
+        closeIfTun(fd)
+    }
+
+    fun closeTun() {
+        val fds = synchronized(fdsLock) {
+            val all = buildList {
+                if (kernelFd >= 0) add(kernelFd)
+                addAll(retiredFds)
+            }
+            kernelFd = -1
+            retiredFds.clear()
+            all
+        }
+        fds.forEach(::closeIfTun)
+    }
+
+    /** Closes [fd] only if that number still points at /dev/tun, so a reused fd is never touched. */
+    private fun closeIfTun(fd: Int) {
+        if (fd < 0) return
         val target = runCatching { android.system.Os.readlink("/proc/self/fd/$fd") }.getOrNull()
         if (target == "/dev/tun") {
             runCatching { ParcelFileDescriptor.adoptFd(fd).close() }
@@ -133,14 +166,6 @@ class TimiaoVpnService : VpnService() {
         closeTun()
         scope.cancel()
         super.onDestroy()
-    }
-
-    private fun networkAddress(addr: String, prefix: Int): String {
-        val o = addr.split('.').map { it.toInt() }
-        val ip = (o[0] shl 24) or (o[1] shl 16) or (o[2] shl 8) or o[3]
-        val mask = if (prefix == 0) 0 else -1 shl (32 - prefix)
-        val n = ip and mask
-        return "${n ushr 24 and 255}.${n ushr 16 and 255}.${n ushr 8 and 255}.${n and 255}"
     }
 
     private fun notificationManager() = getSystemService(NotificationManager::class.java)

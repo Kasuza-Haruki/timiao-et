@@ -22,6 +22,9 @@ class SplitStore(context: Context) {
         fun policy(context: Context, networkId: String?): SplitPolicy =
             SplitStore(context).load(networkId)
 
+        /** One policy for the whole device: all networks share one TUN, so one rule set. */
+        const val GLOBAL_ID = "global"
+
         private const val PREFS = "split_policy"
         private const val KEY_PREFIX = "network_"
     }
