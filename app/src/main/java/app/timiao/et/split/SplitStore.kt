@@ -1,6 +1,7 @@
 package app.timiao.et.split
 
 import android.content.Context
+import android.content.SharedPreferences
 
 /** Stores one [SplitPolicy] per network id in plain SharedPreferences. */
 class SplitStore(context: Context) {
@@ -16,6 +17,22 @@ class SplitStore(context: Context) {
         prefs.edit()
             .putString(KEY_PREFIX + networkId, SplitPolicyCodec.encode(policy))
             .apply()
+    }
+
+    /**
+     * Calls [onChanged] when any network's split policy is saved. SharedPreferences keeps
+     * only a weak reference, so the caller must keep [onChanged]'s returned listener.
+     */
+    fun observe(onChanged: () -> Unit): SharedPreferences.OnSharedPreferenceChangeListener {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key != null && key.startsWith(KEY_PREFIX)) onChanged()
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        return listener
+    }
+
+    fun stopObserving(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
+        prefs.unregisterOnSharedPreferenceChangeListener(listener)
     }
 
     companion object {
