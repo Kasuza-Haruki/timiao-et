@@ -168,6 +168,9 @@ fun HomeScreen(
             }
         }
 
+        // First run: only the create card. Stats and peers mean nothing before a network exists.
+        if (!hasNetwork) return@LazyColumn
+
         item {
             ClickableGlassRow(onClick = { onNavigate(Routes.NODE_INFO) }) {
                 Row(
