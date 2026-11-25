@@ -81,4 +81,10 @@ public data class NetworkStatus(
     val error: String?,
     val node: NodeInfo? = null,
     val events: List<NetworkEvent> = emptyList(),
+    /**
+     * True when the instance is still running but lost its connection: no peers while the
+     * system has no default network, or no peers for longer than the startup grace with a
+     * server configured. [state] is [LinkState.Connecting] in this case.
+     */
+    val reconnecting: Boolean = false,
 )

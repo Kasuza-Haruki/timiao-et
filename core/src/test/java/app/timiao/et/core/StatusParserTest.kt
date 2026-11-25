@@ -277,6 +277,84 @@ class StatusParserTest {
         assertTrue(status.events.isEmpty())
     }
 
+    private val noPeers = """
+        {"home": {"running": true, "my_node_info": {"virtual_ipv4": {"address": {"addr": 177246218}, "network_length": 24}}}}
+    """.trimIndent()
+
+    @Test
+    fun zeroPeersWithoutNetworkIsReconnecting() {
+        val status = StatusParser.parse(
+            noPeers,
+            "home",
+            uptimeSec = 30,
+            networkAvailable = false,
+        )!!
+
+        assertEquals(LinkState.Connecting, status.state)
+        assertTrue(status.reconnecting)
+        assertTrue(status.peers.isEmpty())
+    }
+
+    @Test
+    fun zeroPeersInsideStartupGraceIsPlainConnecting() {
+        val status = StatusParser.parse(noPeers, "home", uptimeSec = 3)!!
+
+        assertEquals(LinkState.Connecting, status.state)
+        assertFalse(status.reconnecting)
+    }
+
+    @Test
+    fun zeroPeersAfterGraceWithConfiguredServerIsReconnecting() {
+        val status = StatusParser.parse(
+            noPeers,
+            "home",
+            uptimeSec = 30,
+            networkAvailable = true,
+            hasConfiguredPeers = true,
+        )!!
+
+        assertEquals(LinkState.Connecting, status.state)
+        assertTrue(status.reconnecting)
+    }
+
+    @Test
+    fun zeroPeersOnIsolatedNetworkStaysConnected() {
+        // A listener-only network with no server has no peer to reach; never show "reconnecting".
+        val status = StatusParser.parse(
+            noPeers,
+            "home",
+            uptimeSec = 300,
+            networkAvailable = true,
+            hasConfiguredPeers = false,
+        )!!
+
+        assertEquals(LinkState.Connected, status.state)
+        assertFalse(status.reconnecting)
+    }
+
+    @Test
+    fun zeroPeersWithRecentPeerHeartbeatStaysConnected() {
+        val status = StatusParser.parse(
+            noPeers,
+            "home",
+            uptimeSec = 30,
+            networkAvailable = true,
+            hasConfiguredPeers = true,
+            peerSeenRecently = true,
+        )!!
+
+        assertEquals(LinkState.Connected, status.state)
+        assertFalse(status.reconnecting)
+    }
+
+    @Test
+    fun peersPresentMeansConnected() {
+        val status = StatusParser.parse(json, "home", uptimeSec = 30, networkAvailable = false)!!
+
+        assertEquals(LinkState.Connected, status.state)
+        assertFalse(status.reconnecting)
+    }
+
     @Test
     fun returnsNullForInvalidJson() {
         assertEquals(null, StatusParser.parse("not json", "home", 0))

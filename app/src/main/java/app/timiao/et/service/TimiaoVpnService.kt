@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -46,6 +48,9 @@ class TimiaoVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         VpnTunProvider.service = this
+        // The engine only reads this. VPN-transport networks are ignored so our own TUN
+        // cannot make the device look online after the physical link is gone.
+        engine.defaultNetworkAvailable = { hasPhysicalNetwork() }
         ensureChannel()
         startForegroundCompat(buildNotification(null, 0))
         scope.launch {
@@ -168,6 +173,19 @@ class TimiaoVpnService : VpnService() {
         super.onDestroy()
     }
 
+    /** True when a physical (non-VPN) network with INTERNET exists. */
+    @Suppress("DEPRECATION")
+    private fun hasPhysicalNetwork(): Boolean {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return true
+        return runCatching {
+            cm.allNetworks.any { network ->
+                val caps = cm.getNetworkCapabilities(network) ?: return@any false
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+            }
+        }.getOrDefault(true)
+    }
+
     private fun notificationManager() = getSystemService(NotificationManager::class.java)
 
     private fun ensureChannel() {
@@ -185,15 +203,21 @@ class TimiaoVpnService : VpnService() {
             Intent(this, TimiaoVpnService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE,
         )
-        val connected = s?.state == LinkState.Connected
-        val text = if (connected) {
-            "${s?.myIpv4 ?: ""} · ↑${rate(s?.txBps ?: 0)} ↓${rate(s?.rxBps ?: 0)} · ${s?.peers?.size ?: 0}"
-        } else {
-            getString(R.string.notif_connecting)
+        val reconnecting = s?.reconnecting == true
+        val connected = s?.state == LinkState.Connected && !reconnecting
+        val title = when {
+            reconnecting -> "网络中断，正在重连"
+            connected -> getString(R.string.notif_connected)
+            else -> getString(R.string.app_name)
+        }
+        val text = when {
+            reconnecting -> "网络中断，正在重连"
+            connected -> "${s?.myIpv4 ?: ""} · ↑${rate(s?.txBps ?: 0)} ↓${rate(s?.rxBps ?: 0)} · ${s?.peers?.size ?: 0}"
+            else -> getString(R.string.notif_connecting)
         }
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(if (connected) R.drawable.ic_stat_connected else R.drawable.ic_stat_idle)
-            .setContentTitle(getString(if (connected) R.string.notif_connected else R.string.app_name))
+            .setContentTitle(title)
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
