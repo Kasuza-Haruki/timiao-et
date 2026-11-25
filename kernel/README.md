@@ -56,7 +56,7 @@ segment is aligned to `0x4000` for Android 15 16 KB pages.
 | ABI | libeasytier_android_jni.so | NEEDED | LOAD align |
 |---|---|---|---|
 | x86_64 | 20,491,640 bytes | liblog, libdl, libm, libc | 0x4000 |
-| arm64-v8a | see `kernel/out/arm64-v8a` | see build log | 0x4000 |
+| arm64-v8a | 18,122,544 bytes | liblog, libdl, libm, libc | 0x4000 |
 
 The JNI library does not list `libeasytier_ffi.so` in `NEEDED`; FFI code is
 linked statically. The separate `libeasytier_ffi.so` is only for C ABI users.
