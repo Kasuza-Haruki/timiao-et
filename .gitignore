@@ -10,3 +10,4 @@ kernel/src/
 *.jks
 .claude/
 app/src/main/jniLibs/
+.kotlin/
