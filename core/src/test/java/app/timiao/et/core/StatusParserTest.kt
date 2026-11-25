@@ -349,10 +349,20 @@ class StatusParserTest {
 
     @Test
     fun peersPresentMeansConnected() {
-        val status = StatusParser.parse(json, "home", uptimeSec = 30, networkAvailable = false)!!
+        val status = StatusParser.parse(json, "home", uptimeSec = 30, networkAvailable = true)!!
 
         assertEquals(LinkState.Connected, status.state)
         assertFalse(status.reconnecting)
+    }
+
+    @Test
+    fun peersWithNoPhysicalNetworkAreReconnecting() {
+        // Stale route entries must not hide a dead uplink.
+        val status = StatusParser.parse(json, "home", uptimeSec = 30, networkAvailable = false)!!
+
+        assertEquals(LinkState.Connecting, status.state)
+        assertTrue(status.reconnecting)
+        assertTrue(status.peers.isNotEmpty())
     }
 
     @Test

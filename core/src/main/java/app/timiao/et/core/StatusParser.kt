@@ -72,10 +72,11 @@ internal object StatusParser {
      *
      * Connection state rules:
      * - not running -> [LinkState.Error];
+     * - system default network unavailable -> reconnecting
+     *   ([LinkState.Connecting] + [NetworkStatus.reconnecting]), even if the kernel still
+     *   lists stale peers;
      * - at least one peer -> [LinkState.Connected];
      * - no peers, under [STARTUP_GRACE_SEC] -> [LinkState.Connecting];
-     * - no peers, system default network unavailable -> reconnecting
-     *   ([LinkState.Connecting] + [NetworkStatus.reconnecting]);
      * - no peers, no server configured (isolated network) -> [LinkState.Connected],
      *   because there is nothing to reach;
      * - no peers, a peer was seen recently ([peerSeenRecently]) -> [LinkState.Connected],
@@ -133,14 +134,14 @@ internal object StatusParser {
         }
 
         val hasPeers = peers.isNotEmpty()
-        val reconnecting = !hasPeers && when {
-            !networkAvailable -> true
+        val reconnecting = !networkAvailable || (!hasPeers && when {
             uptimeSec < STARTUP_GRACE_SEC -> false
             peerSeenRecently -> false
             !hasConfiguredPeers -> false
             else -> true
-        }
+        })
         val state = when {
+            !networkAvailable -> LinkState.Connecting
             hasPeers -> LinkState.Connected
             reconnecting -> LinkState.Connecting
             uptimeSec < STARTUP_GRACE_SEC -> LinkState.Connecting
