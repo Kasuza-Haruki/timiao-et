@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Quick Settings tile icon: 24dp, single color, tinted by the system. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <group
+        android:scaleX="0.18"
+        android:scaleY="0.18"
+        android:translateX="1.2"
+        android:translateY="2.9">
+
+        <path
+            android:pathData="M60 98 C34 98 14 81 14 60 C14 49 17 41 22.4 37.6 L24 8 Q25 3 30 6 L54 26 Q60 22 66 26 L90 6 Q95 3 96 8 L97.6 37.6 C103 41 106 49 106 60 C106 81 86 98 60 98 Z M26 58 C26 51.37 31.37 46 38 46 C44.63 46 50 51.37 50 58 C50 64.63 44.63 70 38 70 C31.37 70 26 64.63 26 58 Z M70 58 C70 51.37 75.37 46 82 46 C88.63 46 94 51.37 94 58 C94 64.63 88.63 70 82 70 C75.37 70 70 64.63 70 58 Z"
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd" />
+    </group>
+</vector>
