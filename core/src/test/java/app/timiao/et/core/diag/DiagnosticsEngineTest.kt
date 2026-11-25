@@ -195,6 +195,34 @@ class DiagnosticsEngineTest {
     }
 
     @Test
+    fun `network unreachable event fails with network advice`() {
+        val raw = rawInfos(
+            listOf(
+                """{"event":{"ConnectError":["udp://1.2.3.4:11010","V4","Network is unreachable"]}}""",
+            ),
+        )
+        val result = report(status = connected(), raw = raw)
+        val item = result.item("events")
+        assertEquals(DiagSeverity.Fail, item.severity)
+        assertTrue(item.advice!!.contains("网络不可达"))
+        assertEquals(DiagSeverity.Fail, result.overall)
+    }
+
+    @Test
+    fun `handshake failure event fails with key advice`() {
+        val raw = rawInfos(
+            listOf(
+                """{"event":{"ConnectionError":["peer","10.0.0.2:11010","handshake failed: decrypt error"]}}""",
+            ),
+        )
+        val result = report(status = connected(), raw = raw)
+        val item = result.item("events")
+        assertEquals(DiagSeverity.Fail, item.severity)
+        assertTrue(item.advice!!.contains("密钥"))
+        assertEquals(DiagSeverity.Fail, result.overall)
+    }
+
+    @Test
     fun `dhcp conflict event is fatal`() {
         val raw = rawInfos(
             listOf("""{"event":{"DhcpIpv4Conflicted":[{"address":{"addr":176061956},"network_length":24}]}}"""),

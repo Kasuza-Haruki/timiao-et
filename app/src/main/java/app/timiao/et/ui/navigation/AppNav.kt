@@ -16,10 +16,12 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -76,6 +78,16 @@ fun TimiaoRoot(vm: AppViewModel) {
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
+
+    // Deep-link/file import finished: show the imported network so the user can check it.
+    val pendingOpen by vm.pendingOpenNetwork.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingOpen) {
+        val target = pendingOpen ?: return@LaunchedEffect
+        vm.consumePendingOpenNetwork()
+        nav.navigate(Routes.edit(target.id, if (target.focusSecret) "secret" else "none")) {
+            launchSingleTop = true
+        }
+    }
 
     val dockRoute = when {
         route == null -> Routes.HOME
@@ -134,7 +146,11 @@ fun TimiaoRoot(vm: AppViewModel) {
                 val ctx = androidx.compose.ui.platform.LocalContext.current
                 val container = (ctx.applicationContext as app.timiao.et.TimiaoApplication).container
                 app.timiao.et.ui.screens.ScanScreen(
-                    importSink = { toml, _ -> importSharedToml(container, toml) },
+                    importSink = { toml, hasSecret ->
+                        val cfg = importSharedToml(container, toml)
+                        // Same hand-off as a deep link: open the editor, focus the secret if absent.
+                        vm.requestOpenNetwork(cfg.id, focusSecret = !hasSecret)
+                    },
                     onBack = { nav.popBackStack() },
                 )
             }
@@ -222,10 +238,14 @@ private fun NavHostController.navigateTopLevel(route: String) {
 }
 
 /** Saves an imported config; a repeated instance id gets a fresh one so two devices never collide. */
-suspend fun importSharedToml(container: app.timiao.et.di.AppContainer, toml: String) {
+suspend fun importSharedToml(
+    container: app.timiao.et.di.AppContainer,
+    toml: String,
+): app.timiao.et.core.NetworkConfig {
     var cfg = container.configRepository.importToml(toml)
     if (container.configRepository.get(cfg.id) != null) {
         cfg = cfg.copy(instanceId = java.util.UUID.randomUUID().toString())
     }
     container.configRepository.save(cfg)
+    return cfg
 }

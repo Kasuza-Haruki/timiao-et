@@ -20,6 +20,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,12 +35,15 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import app.timiao.et.ui.AppViewModel
+import app.timiao.et.ui.PendingOpenNetwork
 import app.timiao.et.ui.navigation.TimiaoRoot
 import app.timiao.et.ui.theme.LocalReducedMotion
 import app.timiao.et.ui.theme.TimiaoTheme
 
 class MainActivity : ComponentActivity() {
     private var pendingGo: (() -> Unit)? = null
+    private var appViewModel: AppViewModel? = null
+    private var queuedOpen: PendingOpenNetwork? = null
 
     private val vpnConsent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         val go = pendingGo
@@ -62,7 +66,10 @@ class MainActivity : ComponentActivity() {
         handleImportIntent(intent)
     }
 
-    /** timiao://import links and shared/opened .toml files. Saved without the secret if the link had none. */
+    /**
+     * timiao://import links and shared/opened .toml files. Saved without the secret if the link had none.
+     * The imported network is opened in the editor; a missing secret focuses that field.
+     */
     private fun handleImportIntent(intent: Intent?) {
         val container = (application as TimiaoApplication).container
         lifecycleScope.launch {
@@ -72,11 +79,22 @@ class MainActivity : ComponentActivity() {
                 val existing = container.configRepository.get(cfg.id)
                 if (existing != null) cfg = cfg.copy(instanceId = java.util.UUID.randomUUID().toString())
                 container.configRepository.save(cfg)
+                openImported(cfg.id, focusSecret = !hasSecret)
                 if (!hasSecret) android.widget.Toast.makeText(this@MainActivity, "已导入「${cfg.networkName}」，请在编辑页补填网络密钥", android.widget.Toast.LENGTH_LONG).show()
                 else android.widget.Toast.makeText(this@MainActivity, "已导入「${cfg.networkName}」", android.widget.Toast.LENGTH_SHORT).show()
             }
             if (result is app.timiao.et.share.ImportIntentResult.Failure)
                 android.widget.Toast.makeText(this@MainActivity, result.message, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** Opens [id] when the UI is ready; otherwise the id stays queued until setContent. */
+    private fun openImported(id: String, focusSecret: Boolean) {
+        val vm = appViewModel
+        if (vm == null) {
+            queuedOpen = PendingOpenNetwork(id, focusSecret)
+        } else {
+            vm.requestOpenNetwork(id, focusSecret)
         }
     }
 
@@ -87,9 +105,18 @@ class MainActivity : ComponentActivity() {
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         val container = (application as TimiaoApplication).container
-        handleImportIntent(intent)
+        // A configuration change reuses the launch intent; import only on a cold start.
+        if (savedInstanceState == null) handleImportIntent(intent)
         setContent {
             val vm: AppViewModel = viewModel(factory = AppViewModel.factory(container))
+            appViewModel = vm
+            // An import that finished before the UI existed opens once the nav host is ready.
+            LaunchedEffect(Unit) {
+                queuedOpen?.let {
+                    vm.requestOpenNetwork(it.id, it.focusSecret)
+                    queuedOpen = null
+                }
+            }
             vm.ensureVpnConsent = ::ensureVpnConsent
             val settings by vm.settings.collectAsStateWithLifecycle()
             val reducedMotion = rememberSystemReducedMotion()

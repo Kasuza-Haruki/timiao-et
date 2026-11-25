@@ -19,10 +19,14 @@ import app.timiao.et.ui.data.toUi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+/** One-shot request to open a network in the editor after an import. */
+data class PendingOpenNetwork(val id: String, val focusSecret: Boolean = false)
 
 class AppViewModel(
     private val engine: Engine,
@@ -73,6 +77,24 @@ class AppViewModel(
 
     /** Set by MainActivity. Runs [go] after the system VPN consent dialog is accepted. */
     var ensureVpnConsent: ((go: () -> Unit) -> Unit)? = null
+
+    private val _pendingOpenNetwork = MutableStateFlow<PendingOpenNetwork?>(null)
+
+    /**
+     * One-shot navigation request after a deep-link/file import. AppNav observes
+     * it and opens the editor; [consumePendingOpenNetwork] clears it.
+     */
+    val pendingOpenNetwork: StateFlow<PendingOpenNetwork?> = _pendingOpenNetwork.asStateFlow()
+
+    fun requestOpenNetwork(id: String, focusSecret: Boolean = false) {
+        _pendingOpenNetwork.value = PendingOpenNetwork(id, focusSecret)
+    }
+
+    fun consumePendingOpenNetwork(): PendingOpenNetwork? {
+        val pending = _pendingOpenNetwork.value
+        _pendingOpenNetwork.value = null
+        return pending
+    }
 
     private fun startWithConsent(id: String) {
         val ask = ensureVpnConsent
