@@ -1,6 +1,11 @@
 package app.timiao.et.ui.data
 
+import app.timiao.et.core.Flags
 import app.timiao.et.core.NetworkConfig
+import app.timiao.et.core.PeerConfig
+import app.timiao.et.core.PortForward
+import app.timiao.et.core.ProxyNetwork
+import app.timiao.et.core.VpnPortal
 import java.util.UUID
 
 /**
@@ -27,39 +32,78 @@ data class UiNetwork(
         relayNetworkWhitelist.isEmpty() || relayNetworkWhitelist.contains(name) || relayNetworkWhitelist.contains("*")
 }
 
-fun NetworkConfig.toUi(): UiNetwork = UiNetwork(
-    id = id,
-    name = name,
-    secret = secret,
-    servers = servers,
-    dhcp = dhcp,
-    ipv4 = ipv4.orEmpty(),
-    flags = flags,
-    proxyNetworks = proxyNetworks,
-    portForwards = portForwards,
-    vpnPortal = vpnPortal.orEmpty(),
-    relayNetworkWhitelist = relayNetworkWhitelist,
-    listeners = listeners,
-    aclText = aclText.orEmpty(),
-    tomlText = tomlText,
+private val boolFlags: Map<String, (Flags) -> Boolean> = mapOf(
+    "latency_first" to { f -> f.latencyFirst }, "multi_thread" to { f -> f.multiThread },
+    "disable_p2p" to { f -> f.disableP2p }, "disable_udp_hole_punching" to { f -> f.disableUdpHolePunching },
+    "enable_encryption" to { f -> f.enableEncryption }, "enable_ipv6" to { f -> f.enableIpv6 },
+    "accept_dns" to { f -> f.acceptDns }, "use_smoltcp" to { f -> f.useSmoltcp },
+    "private_mode" to { f -> f.privateMode }, "relay_all_peer_rpc" to { f -> f.relayAllPeerRpc },
+    "enable_kcp_proxy" to { f -> f.enableKcpProxy }, "enable_quic_proxy" to { f -> f.enableQuicProxy },
+    "no_tun" to { f -> f.noTun }, "enable_exit_node" to { f -> f.enableExitNode },
+    "proxy_forward_by_system" to { f -> f.proxyForwardBySystem },
 )
 
-fun UiNetwork.toConfig(): NetworkConfig = NetworkConfig(
+private fun Flags.withFlag(key: String, v: Boolean): Flags = when (key) {
+    "latency_first" -> copy(latencyFirst = v)
+    "multi_thread" -> copy(multiThread = v)
+    "disable_p2p" -> copy(disableP2p = v)
+    "disable_udp_hole_punching" -> copy(disableUdpHolePunching = v)
+    "enable_encryption" -> copy(enableEncryption = v)
+    "enable_ipv6" -> copy(enableIpv6 = v)
+    "accept_dns" -> copy(acceptDns = v)
+    "use_smoltcp" -> copy(useSmoltcp = v)
+    "private_mode" -> copy(privateMode = v)
+    "relay_all_peer_rpc" -> copy(relayAllPeerRpc = v)
+    "enable_kcp_proxy" -> copy(enableKcpProxy = v)
+    "enable_quic_proxy" -> copy(enableQuicProxy = v)
+    "no_tun" -> copy(noTun = v)
+    "enable_exit_node" -> copy(enableExitNode = v)
+    "proxy_forward_by_system" -> copy(proxyForwardBySystem = v)
+    else -> this
+}
+
+fun NetworkConfig.toUi(): UiNetwork = UiNetwork(
     id = id,
-    name = name,
-    secret = secret,
-    servers = servers,
+    name = networkName,
+    secret = networkSecret,
+    servers = peers.map { it.uri },
     dhcp = dhcp,
-    ipv4 = ipv4.ifBlank { null },
-    flags = flags,
-    proxyNetworks = proxyNetworks,
-    portForwards = portForwards,
-    vpnPortal = vpnPortal.ifBlank { null },
-    relayNetworkWhitelist = relayNetworkWhitelist,
-    listeners = listeners,
-    aclText = aclText.ifBlank { null },
-    tomlText = tomlText,
+    ipv4 = ipv4.orEmpty(),
+    flags = boolFlags.mapValues { (_, get) -> get(flags) },
+    proxyNetworks = proxyNetworks.map { it.cidr },
+    portForwards = portForwards.map { "${it.proto}://${it.bindAddr} -> ${it.dstAddr}" },
+    vpnPortal = vpnPortal?.wireguardListen.orEmpty(),
+    relayNetworkWhitelist = flags.relayNetworkWhitelist.split(' ').filter { it.isNotBlank() && it != "*" },
+    listeners = listenerUrls,
+    aclText = acl.orEmpty(),
+    tomlText = null,
 )
+
+/** Applies UI edits onto [base] so fields the UI does not show (hostname, secure mode, extras...) survive. */
+fun UiNetwork.toConfig(base: NetworkConfig? = null): NetworkConfig {
+    val b = base ?: NetworkConfig(instanceName = name.ifBlank { id })
+    var f = b.flags
+    flags.forEach { (k, v) -> f = f.withFlag(k, v) }
+    f = f.copy(relayNetworkWhitelist = relayNetworkWhitelist.joinToString(" ").ifBlank { "*" })
+    return b.copy(
+        networkName = name,
+        networkSecret = secret,
+        peers = servers.map { u -> b.peers.firstOrNull { it.uri == u } ?: PeerConfig(u) },
+        dhcp = dhcp,
+        ipv4 = ipv4.ifBlank { null },
+        proxyNetworks = proxyNetworks.map { c -> b.proxyNetworks.firstOrNull { it.cidr == c } ?: ProxyNetwork(c) },
+        portForwards = portForwards.mapNotNull(::parseForward),
+        vpnPortal = if (vpnPortal.isBlank()) null else (b.vpnPortal?.copy(wireguardListen = vpnPortal) ?: VpnPortal(vpnPortal)),
+        listenerUrls = listeners,
+        acl = aclText.ifBlank { null },
+        flags = f,
+    )
+}
+
+private fun parseForward(line: String): PortForward? {
+    val m = Regex("""^(tcp|udp)://(\S+)\s*->\s*(\S+)$""").find(line.trim()) ?: return null
+    return PortForward(bindAddr = m.groupValues[2], dstAddr = m.groupValues[3], proto = m.groupValues[1])
+}
 
 val DefaultFlags: Map<String, Boolean> = mapOf(
     "enable_encryption" to true,

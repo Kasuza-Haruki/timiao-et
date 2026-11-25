@@ -3,7 +3,12 @@ package app.timiao.et
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
+import app.timiao.et.service.TimiaoVpnService
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -31,12 +36,34 @@ import app.timiao.et.ui.theme.LocalReducedMotion
 import app.timiao.et.ui.theme.TimiaoTheme
 
 class MainActivity : ComponentActivity() {
+    private var pendingGo: (() -> Unit)? = null
+
+    private val vpnConsent = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val go = pendingGo
+        pendingGo = null
+        if (r.resultCode == RESULT_OK) go?.invoke()
+    }
+
+    private val notifPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private fun ensureVpnConsent(go: () -> Unit) {
+        val intent = TimiaoVpnService.prepareIntent(this)
+        if (intent == null) go() else {
+            pendingGo = go
+            vpnConsent.launch(intent)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         val container = (application as TimiaoApplication).container
         setContent {
             val vm: AppViewModel = viewModel(factory = AppViewModel.factory(container))
+            vm.ensureVpnConsent = ::ensureVpnConsent
             val settings by vm.settings.collectAsStateWithLifecycle()
             val reducedMotion = rememberSystemReducedMotion()
             val dark = when (settings.themeMode) {

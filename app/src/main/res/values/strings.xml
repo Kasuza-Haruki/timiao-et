@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">缇喵</string>
+    <string name="notif_channel">连接状态</string>
+    <string name="notif_connecting">正在连接…</string>
+    <string name="notif_connected">已连接</string>
+    <string name="notif_disconnect">断开</string>
 </resources>

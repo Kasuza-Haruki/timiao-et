@@ -68,19 +68,28 @@ class AppViewModel(
         settingsStore.updateActiveNetwork(id)
     }
 
+    /** Set by MainActivity. Runs [go] after the system VPN consent dialog is accepted. */
+    var ensureVpnConsent: ((go: () -> Unit) -> Unit)? = null
+
+    private fun startWithConsent(id: String) {
+        val ask = ensureVpnConsent
+        if (ask == null) viewModelScope.launch { engine.start(id) }
+        else ask { viewModelScope.launch { engine.start(id) } }
+    }
+
     fun toggleActiveNetwork() {
         val net = activeNetwork.value ?: return
         val state = statusOf(net.id).state
         viewModelScope.launch {
             when (state) {
                 LinkState.Connected, LinkState.Connecting -> engine.stop(net.id)
-                LinkState.Idle, LinkState.Error -> engine.start(net.id)
+                LinkState.Idle, LinkState.Error -> startWithConsent(net.id)
             }
         }
     }
 
     fun startNetwork(id: String) {
-        viewModelScope.launch { engine.start(id) }
+        startWithConsent(id)
     }
 
     fun stopNetwork(id: String) {
@@ -88,7 +97,7 @@ class AppViewModel(
     }
 
     fun saveNetwork(network: UiNetwork) {
-        viewModelScope.launch { repository.save(network.toConfig()) }
+        viewModelScope.launch { repository.save(network.toConfig(repository.get(network.id))) }
     }
 
     fun deleteNetwork(id: String) {
@@ -102,7 +111,11 @@ class AppViewModel(
         repository.importToml(text).toUi()
     }
 
-    fun exportToml(network: UiNetwork): String = repository.exportToml(network.toConfig())
+    private val rawConfigs = repository.networks
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun exportToml(network: UiNetwork): String =
+        repository.exportToml(network.toConfig(rawConfigs.value.firstOrNull { it.id == network.id }))
 
     fun setThemeMode(mode: ThemeMode) = settingsStore.updateTheme(mode)
 

@@ -29,7 +29,7 @@ class TimiaoVpnService : VpnService() {
     private var tun: ParcelFileDescriptor? = null
     private val activeIds = linkedSetOf<String>()
 
-    private val engine get() = (application as TimiaoApplication).container.engine
+    private val engine get() = (application as TimiaoApplication).container.nativeEngine
 
     override fun onCreate() {
         super.onCreate()
