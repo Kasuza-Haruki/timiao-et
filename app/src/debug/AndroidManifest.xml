@@ -20,5 +20,11 @@
                 <action android:name="app.timiao.et.DEBUG_PREPARE" />
             </intent-filter>
         </receiver>
+
+        <!-- Debug only: preview ShareScreen / ScanScreen / TrafficScreen / peer actions. -->
+        <activity
+            android:name="app.timiao.et.debug.ShareDebugActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Timiao" />
     </application>
 </manifest>
