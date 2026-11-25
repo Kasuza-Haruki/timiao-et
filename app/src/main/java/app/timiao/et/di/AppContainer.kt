@@ -5,6 +5,7 @@ import app.timiao.et.core.AndroidKeystoreCipher
 import app.timiao.et.core.ConfigRepository
 import app.timiao.et.core.Engine
 import app.timiao.et.core.FileConfigRepository
+import app.timiao.et.core.CoreStrings
 import app.timiao.et.core.JniEngine
 import app.timiao.et.service.ServiceEngine
 import app.timiao.et.service.VpnTunProvider
@@ -22,7 +23,7 @@ class AppContainer(context: Context) {
     val configRepository: ConfigRepository = FileConfigRepository(java.io.File(app.filesDir, "networks.enc"), AndroidKeystoreCipher())
 
     /** Raw native engine. Only the VPN service calls start/stop on it. */
-    val nativeEngine: JniEngine by lazy { JniEngine(configRepository, VpnTunProvider) }
+    val nativeEngine: JniEngine by lazy { JniEngine(configRepository, VpnTunProvider, strings = AndroidCoreStrings(app)) }
 
     /** What the UI uses: routes start/stop through the VPN service. */
     val engine: Engine by lazy { ServiceEngine(app, nativeEngine) }
@@ -45,6 +46,20 @@ class AppContainer(context: Context) {
                 val kind = currentNetworkKind(cm)
                 connected.forEach { (id, st) -> trafficRecorder.record(id, kind, st.peers) }
             }
+        }
+    }
+}
+
+
+/** Resolves core text keys through this app's resources, so English mode is complete. */
+class AndroidCoreStrings(private val context: android.content.Context) : CoreStrings {
+    override fun get(key: String, vararg args: Any?): String {
+        val id = context.resources.getIdentifier(key, "string", context.packageName)
+        if (id == 0) return key
+        return if (args.isEmpty()) {
+            context.getString(id)
+        } else {
+            context.getString(id, *args.map { it ?: "" }.toTypedArray())
         }
     }
 }

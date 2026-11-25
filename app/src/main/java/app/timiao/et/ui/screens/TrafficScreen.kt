@@ -30,6 +30,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.timiao.et.R
 import app.timiao.et.core.LinkState
 import app.timiao.et.traffic.NetworkKind
 import app.timiao.et.traffic.TrafficDecision
@@ -117,30 +119,31 @@ fun TrafficScreen(
     val policy = data.policy
     val monthMobile = month.byKind[NetworkKind.MOBILE]?.total ?: 0L
     val decision = TrafficMath.decide(kind, monthMobile, policy)
+    val warnOff = stringResource(R.string.traffic_warn_off)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = DockInset,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item { ScreenHeader(title = "流量", subtitle = "按网络类型统计，保存在本机") }
+        item { ScreenHeader(title = stringResource(R.string.traffic_title), subtitle = stringResource(R.string.traffic_subtitle)) }
 
-        item { SectionLabel("当前网络") }
+        item { SectionLabel(stringResource(R.string.traffic_section_current)) }
         item {
             val (title, detail, color) = when (decision) {
                 TrafficDecision.Block -> Triple(
-                    "移动数据下禁止连接",
-                    "本月移动数据已用 ${formatBytes(monthMobile)}。可在下方关闭此限制。",
+                    stringResource(R.string.traffic_block_title),
+                    stringResource(R.string.traffic_block_detail, formatBytes(monthMobile)),
                     MaterialTheme.colorScheme.error,
                 )
                 TrafficDecision.Warn -> Triple(
-                    "达到移动数据提醒阈值",
-                    "本月移动数据已用 ${formatBytes(monthMobile)}，阈值 ${policy.warnAtMb} MB。",
+                    stringResource(R.string.traffic_warn_title),
+                    stringResource(R.string.traffic_warn_detail, formatBytes(monthMobile), policy.warnAtMb),
                     g.warn,
                 )
                 TrafficDecision.Allow -> Triple(
-                    "允许连接",
-                    "当前网络：${kind.label}",
+                    stringResource(R.string.traffic_allow_title),
+                    stringResource(R.string.traffic_allow_detail, stringResource(kind.labelRes)),
                     g.good,
                 )
             }
@@ -159,12 +162,12 @@ fun TrafficScreen(
             }
         }
 
-        item { SectionLabel("今日") }
+        item { SectionLabel(stringResource(R.string.traffic_section_today)) }
         item { UsageCard(today, kind) }
-        item { SectionLabel("本月") }
+        item { SectionLabel(stringResource(R.string.traffic_section_month)) }
         item { UsageCard(month, kind) }
 
-        item { SectionLabel("近 7 天总流量") }
+        item { SectionLabel(stringResource(R.string.traffic_section_week)) }
         item {
             Column(
                 modifier = Modifier
@@ -182,10 +185,15 @@ fun TrafficScreen(
                 val busiest = days.maxByOrNull { it.second }
                 Text(
                     text = if (busiest == null || busiest.second == 0L) {
-                        "还没有流量记录。连接网络后开始统计。"
+                        stringResource(R.string.traffic_empty)
                     } else {
-                        "最高 ${busiest.first.monthValue}/${busiest.first.dayOfMonth} · ${formatBytes(busiest.second)}" +
-                            " · 7 天合计 ${formatBytes(days.sumOf { it.second })}"
+                        stringResource(
+                            R.string.traffic_busiest,
+                            busiest.first.monthValue,
+                            busiest.first.dayOfMonth,
+                            formatBytes(busiest.second),
+                            formatBytes(days.sumOf { it.second }),
+                        )
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = g.muted,
@@ -193,11 +201,11 @@ fun TrafficScreen(
             }
         }
 
-        item { SectionLabel("移动数据限制") }
+        item { SectionLabel(stringResource(R.string.traffic_section_limit)) }
         item {
             GlassSwitchRow(
-                title = "移动数据下不连接",
-                subtitle = "开启后，当前网络是移动数据时阻止建立连接。",
+                title = stringResource(R.string.traffic_block_switch),
+                subtitle = stringResource(R.string.traffic_block_switch_sub),
                 checked = policy.blockOnMobile,
                 onCheckedChange = {
                     traffic.setPolicy(policy.copy(blockOnMobile = it))
@@ -206,16 +214,16 @@ fun TrafficScreen(
         }
         item {
             GlassDropdownRow(
-                label = "超过阈值提醒",
+                label = stringResource(R.string.traffic_warn_label),
                 current = policy.warnAtMb,
                 options = WarnThresholds,
-                optionLabel = { if (it == 0) "关闭" else "$it MB" },
+                optionLabel = { if (it == 0) warnOff else "$it MB" },
                 onSelect = { traffic.setPolicy(policy.copy(warnAtMb = it)) },
             )
         }
         item {
             Text(
-                text = "统计口径：内核每秒返回的节点累计字节数，取相邻两次差值的非负增量，按本地日期累计。重连后自动重置基线。",
+                text = stringResource(R.string.traffic_footer),
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 4.dp),
@@ -236,19 +244,19 @@ private fun UsageCard(usage: TrafficUsage, kind: NetworkKind) {
             .padding(14.dp),
     ) {
         Row {
-            ValueColumn("上传", formatBytes(usage.tx), Modifier.weight(1f))
-            ValueColumn("下载", formatBytes(usage.rx), Modifier.weight(1f))
-            ValueColumn("总计", formatBytes(usage.total), Modifier.weight(1f))
+            ValueColumn(stringResource(R.string.traffic_upload), formatBytes(usage.tx), Modifier.weight(1f))
+            ValueColumn(stringResource(R.string.traffic_download), formatBytes(usage.rx), Modifier.weight(1f))
+            ValueColumn(stringResource(R.string.traffic_total), formatBytes(usage.total), Modifier.weight(1f))
         }
         Spacer(Modifier.height(8.dp))
         Row {
             ValueColumn("Wi-Fi", formatBytes(usage.byKind[NetworkKind.WIFI]?.total ?: 0), Modifier.weight(1f))
             ValueColumn(
-                "移动数据",
+                stringResource(R.string.traffic_mobile),
                 formatBytes(usage.byKind[NetworkKind.MOBILE]?.total ?: 0),
                 Modifier.weight(1f),
             )
-            ValueColumn("当前", kind.label, Modifier.weight(1f))
+            ValueColumn(stringResource(R.string.traffic_current), stringResource(kind.labelRes), Modifier.weight(1f))
         }
     }
 }

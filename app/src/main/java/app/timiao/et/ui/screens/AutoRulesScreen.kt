@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -46,6 +47,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.timiao.et.R
 import app.timiao.et.auto.AutoCondition
 import app.timiao.et.auto.AutoConnect
 import app.timiao.et.auto.AutoDecision
@@ -91,19 +93,19 @@ fun AutoRulesEntryRow(onClick: () -> Unit) {
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    "自动连接",
+                    stringResource(R.string.auto_entry_title),
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    "按 Wi-Fi / 移动网络自动开关",
+                    stringResource(R.string.auto_entry_sub),
                     style = MaterialTheme.typography.labelSmall,
                     color = g.muted,
                 )
             }
             Icon(
                 Icons.Filled.KeyboardArrowDown,
-                contentDescription = "进入自动连接",
+                contentDescription = stringResource(R.string.auto_entry_title),
                 tint = g.muted,
                 modifier = Modifier.size(20.dp).rotate(-90f),
             )
@@ -194,13 +196,13 @@ fun AutoRulesScreen(vm: AppViewModel, onBack: () -> Unit) {
     ) {
         item {
             ScreenHeader(
-                title = "自动连接",
-                subtitle = "按网络环境自动开关 VPN",
+                title = stringResource(R.string.auto_title),
+                subtitle = stringResource(R.string.auto_subtitle),
                 onBack = onBack,
             )
         }
 
-        item { SectionLabel("开始前") }
+        item { SectionLabel(stringResource(R.string.auto_section_before)) }
         item {
             Column(
                 modifier = Modifier
@@ -211,20 +213,20 @@ fun AutoRulesScreen(vm: AppViewModel, onBack: () -> Unit) {
             ) {
                 PermissionStep(
                     index = 1,
-                    title = "允许 VPN",
-                    detail = "自动连接需要在后台启动 VPN 服务。",
+                    title = stringResource(R.string.auto_perm_vpn),
+                    detail = stringResource(R.string.auto_perm_vpn_detail),
                     granted = vpnGranted,
-                    actionText = if (vpnGranted) null else "去授权",
+                    actionText = if (vpnGranted) null else stringResource(R.string.auto_go_grant),
                     onAction = {
                         TimiaoVpnService.prepareIntent(context)?.let { vpnLauncher.launch(it) }
                     },
                 )
                 PermissionStep(
                     index = 2,
-                    title = "允许通知",
-                    detail = "授权提醒和断开提示会以通知显示。",
+                    title = stringResource(R.string.auto_perm_notifications),
+                    detail = stringResource(R.string.auto_perm_notifications_detail),
                     granted = notificationGranted,
-                    actionText = if (notificationGranted || Build.VERSION.SDK_INT < 33) null else "去授权",
+                    actionText = if (notificationGranted || Build.VERSION.SDK_INT < 33) null else stringResource(R.string.auto_go_grant),
                     onAction = {
                         if (Build.VERSION.SDK_INT >= 33) {
                             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -233,10 +235,10 @@ fun AutoRulesScreen(vm: AppViewModel, onBack: () -> Unit) {
                 )
                 PermissionStep(
                     index = 3,
-                    title = "允许定位（读取 Wi-Fi 名称）",
-                    detail = "Android 10+ 读取 Wi-Fi 名称需要定位权限。拒绝后只能使用「仅移动数据」与「总是连接」规则。",
+                    title = stringResource(R.string.auto_perm_location),
+                    detail = stringResource(R.string.auto_perm_location_detail),
                     granted = locationGranted,
-                    actionText = if (locationGranted) "定位设置" else "去授权",
+                    actionText = if (locationGranted) stringResource(R.string.auto_location_settings) else stringResource(R.string.auto_go_grant),
                     onAction = {
                         if (locationGranted) openLocationSettings()
                         else locationLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -244,7 +246,7 @@ fun AutoRulesScreen(vm: AppViewModel, onBack: () -> Unit) {
                 )
                 if (locationGranted && snapshot.type == NetType.Wifi && snapshot.ssid == null) {
                     Text(
-                        "已授权但读不到名称。请打开系统定位总开关，或保持应用在前台后再试。",
+                        stringResource(R.string.auto_location_hint),
                         style = MaterialTheme.typography.labelSmall,
                         color = g.warn,
                     )
@@ -254,8 +256,8 @@ fun AutoRulesScreen(vm: AppViewModel, onBack: () -> Unit) {
 
         item {
             GlassSwitchRow(
-                title = "启用自动连接",
-                subtitle = "关闭后保留规则，但不再响应网络变化",
+                title = stringResource(R.string.auto_enable),
+                subtitle = stringResource(R.string.auto_enable_sub),
                 checked = state.enabled,
                 onCheckedChange = { on ->
                     if (on) AutoConnect.enable(context) else AutoConnect.disable(context)
@@ -264,7 +266,7 @@ fun AutoRulesScreen(vm: AppViewModel, onBack: () -> Unit) {
             )
         }
 
-        item { SectionLabel("当前网络") }
+        item { SectionLabel(stringResource(R.string.auto_section_current)) }
         item {
             Column(
                 modifier = Modifier
@@ -272,14 +274,14 @@ fun AutoRulesScreen(vm: AppViewModel, onBack: () -> Unit) {
                     .glass(RoundedCornerShape(22.dp), GlassLevel.Regular)
                     .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                InfoRow("类型", networkLabel(snapshot))
-                InfoRow("Wi-Fi 名称", ssidLabel(snapshot))
-                InfoRow("定位权限", if (locationGranted) "已授权" else "未授权")
-                InfoRow("规则结果", if (state.enabled) decisionLabel(decision, networks, activeName) else "自动连接已关闭")
+                InfoRow(stringResource(R.string.auto_type), networkLabel(snapshot))
+                InfoRow(stringResource(R.string.auto_wifi_name), ssidLabel(snapshot))
+                InfoRow(stringResource(R.string.auto_location_permission), stringResource(if (locationGranted) R.string.auto_granted else R.string.auto_not_granted))
+                InfoRow(stringResource(R.string.auto_rule_result), if (state.enabled) decisionLabel(decision, networks, activeName) else stringResource(R.string.auto_disabled))
             }
         }
 
-        item { SectionLabel("全局规则") }
+        item { SectionLabel(stringResource(R.string.auto_section_global)) }
         item {
             GlobalRuleCard(
                 rule = state.rules.firstOrNull { it.isGlobal },
@@ -288,10 +290,10 @@ fun AutoRulesScreen(vm: AppViewModel, onBack: () -> Unit) {
             )
         }
 
-        item { SectionLabel("按网络") }
+        item { SectionLabel(stringResource(R.string.auto_section_per_network)) }
         if (networks.isEmpty()) {
             item {
-                EmptyGlassCard("还没有网络。先在「网络」页创建，再回到这里设置规则。")
+                EmptyGlassCard(stringResource(R.string.auto_empty))
             }
         } else {
             items(networks.size) { index ->
@@ -306,7 +308,7 @@ fun AutoRulesScreen(vm: AppViewModel, onBack: () -> Unit) {
 
         item {
             Text(
-                text = "规则按「网络规则 → 全局规则」匹配，连接优先于断开。Android 12+ 可能阻止后台自动启动，此时会发一条通知，点按即可连接。",
+                text = stringResource(R.string.auto_footer),
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
@@ -356,7 +358,7 @@ private fun PermissionStep(
             SmallAction(actionText, onAction)
         } else {
             Text(
-                "已完成",
+                stringResource(R.string.auto_done),
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                 color = g.good,
             )
@@ -397,18 +399,18 @@ private fun GlobalRuleCard(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
-            "作用于当前网络：${activeName ?: "上次使用的网络"}",
+            stringResource(R.string.auto_global_target, activeName ?: stringResource(R.string.auto_last_network)),
             style = MaterialTheme.typography.labelSmall,
             color = g.muted,
         )
         GlassSwitchRow(
-            title = "启用全局规则",
-            subtitle = "没有匹配的网络规则时生效",
+            title = stringResource(R.string.auto_global_enable),
+            subtitle = stringResource(R.string.auto_global_enable_sub),
             checked = current.enabled,
             onCheckedChange = { onChange(current.copy(enabled = it)) },
         )
         SegmentedGlass(
-            options = AutoCondition.entries.map { it.shortLabel },
+            options = AutoCondition.entries.map { stringResource(it.shortLabelRes) },
             selected = AutoCondition.entries.indexOf(current.condition),
             onSelect = {
                 onChange(current.copy(condition = AutoCondition.entries[it], enabled = true))
@@ -420,12 +422,12 @@ private fun GlobalRuleCard(
                 onValueChange = {
                     onChange(current.copy(wifiNames = parseWifiNames(it), enabled = true))
                 },
-                label = "Wi-Fi 名称（逗号分隔）",
-                placeholder = "例如：Home, Office",
+                label = stringResource(R.string.auto_wifi_names_label),
+                placeholder = stringResource(R.string.auto_wifi_names_placeholder),
             )
         }
         GlassSwitchRow(
-            title = "断开后保留通知",
+            title = stringResource(R.string.auto_keep_notification),
             checked = current.keepNotification,
             onCheckedChange = { onChange(current.copy(keepNotification = it, enabled = true)) },
         )
@@ -441,6 +443,7 @@ private fun NetworkRuleCard(
     val g = LocalGlassColors.current
     val enabled = rule?.enabled == true
     val current = rule ?: AutoRule(networkId = network.id, enabled = false)
+    val conditionLabels = AutoCondition.entries.associateWith { stringResource(it.labelRes) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -449,36 +452,36 @@ private fun NetworkRuleCard(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         GlassSwitchRow(
-            title = network.name.ifBlank { "未命名网络" },
-            subtitle = if (enabled) current.condition.summary(current) else "未启用自动规则",
+            title = network.name.ifBlank { stringResource(R.string.networks_unnamed) },
+            subtitle = if (enabled) current.condition.summary(current) else stringResource(R.string.auto_rule_off),
             checked = enabled,
             onCheckedChange = { on -> onChange(current.copy(enabled = on)) },
         )
         if (enabled) {
             GlassDropdownRow(
-                label = "连接条件",
+                label = stringResource(R.string.auto_condition),
                 current = current.condition,
                 options = AutoCondition.entries,
-                optionLabel = { it.label },
+                optionLabel = { conditionLabels[it].orEmpty() },
                 onSelect = { onChange(current.copy(condition = it)) },
             )
             if (current.condition.needsSsid) {
                 GlassTextField(
                     value = formatWifiNames(current.wifiNames),
                     onValueChange = { onChange(current.copy(wifiNames = parseWifiNames(it))) },
-                    label = "Wi-Fi 名称（逗号分隔）",
-                    placeholder = "例如：Home, Office",
+                    label = stringResource(R.string.auto_wifi_names_label),
+                    placeholder = stringResource(R.string.auto_wifi_names_placeholder),
                 )
             }
             GlassSwitchRow(
-                title = "断开后保留通知",
+                title = stringResource(R.string.auto_keep_notification),
                 checked = current.keepNotification,
                 onCheckedChange = { onChange(current.copy(keepNotification = it)) },
             )
         }
         if (!enabled) {
             Text(
-                "打开开关后，这条网络会按所选条件自动连接。",
+                stringResource(R.string.auto_rule_hint),
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
             )
@@ -486,11 +489,15 @@ private fun NetworkRuleCard(
     }
 }
 
-private fun AutoCondition.summary(rule: AutoRule): String = when (this) {
-    AutoCondition.Always -> "总是连接"
-    AutoCondition.CellularOnly -> "仅移动数据时连接"
-    AutoCondition.WifiOnly -> "仅这些 Wi-Fi：${formatWifiNames(rule.wifiNames).ifBlank { "未设置" }}"
-    AutoCondition.ExceptWifi -> "排除这些 Wi-Fi：${formatWifiNames(rule.wifiNames).ifBlank { "未设置" }}"
+@Composable
+private fun AutoCondition.summary(rule: AutoRule): String {
+    val names = formatWifiNames(rule.wifiNames).ifBlank { stringResource(R.string.auto_not_set) }
+    return when (this) {
+        AutoCondition.Always -> stringResource(R.string.auto_summary_always)
+        AutoCondition.CellularOnly -> stringResource(R.string.auto_summary_cellular)
+        AutoCondition.WifiOnly -> stringResource(R.string.auto_summary_wifi, names)
+        AutoCondition.ExceptWifi -> stringResource(R.string.auto_summary_except_wifi, names)
+    }
 }
 
 private fun notificationsGranted(context: Context): Boolean =
@@ -498,20 +505,23 @@ private fun notificationsGranted(context: Context): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
         PackageManager.PERMISSION_GRANTED
 
+@Composable
 private fun networkLabel(snapshot: NetworkSnapshot): String = when (snapshot.type) {
-    NetType.None -> "无网络"
-    NetType.Wifi -> "Wi-Fi"
-    NetType.Cellular -> "移动数据"
-    NetType.Other -> "其他网络"
+    NetType.None -> stringResource(R.string.auto_type_none)
+    NetType.Wifi -> stringResource(R.string.auto_type_wifi)
+    NetType.Cellular -> stringResource(R.string.auto_type_cellular)
+    NetType.Other -> stringResource(R.string.auto_type_other)
 }
 
+@Composable
 private fun ssidLabel(snapshot: NetworkSnapshot): String = when {
     snapshot.type != NetType.Wifi -> "—"
-    !snapshot.locationGranted -> "未授权定位"
-    snapshot.ssid == null -> "读取不到"
+    !snapshot.locationGranted -> stringResource(R.string.auto_location_denied)
+    snapshot.ssid == null -> stringResource(R.string.auto_ssid_unreadable)
     else -> snapshot.ssid
 }
 
+@Composable
 private fun decisionLabel(
     decision: AutoDecision,
     networks: List<UiNetwork>,
@@ -521,9 +531,9 @@ private fun decisionLabel(
         val name = decision.networkId
             ?.let { id -> networks.firstOrNull { it.id == id }?.name }
             ?: activeName
-            ?: "当前网络"
-        "连接「$name」"
+            ?: stringResource(R.string.auto_current_network)
+        stringResource(R.string.auto_decision_connect, name)
     }
-    is AutoDecision.Disconnect -> "断开自动连接"
-    is AutoDecision.Skip -> "保持现状（${decision.reason.label}）"
+    is AutoDecision.Disconnect -> stringResource(R.string.auto_decision_disconnect)
+    is AutoDecision.Skip -> stringResource(R.string.auto_decision_skip, stringResource(decision.reason.labelRes))
 }

@@ -22,12 +22,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.timiao.et.R
 import app.timiao.et.core.LinkState
 import app.timiao.et.ui.AppViewModel
 import app.timiao.et.ui.components.CatMascot
@@ -61,32 +64,33 @@ fun HomeScreen(
     val status by vm.activeStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val g = LocalGlassColors.current
+    val unnamedNetwork = stringResource(R.string.home_unnamed_network)
 
     val hasNetwork = active != null
     val reconnecting = status.reconnecting
     val statusTitle = when {
-        !hasNetwork -> "还没有网络"
-        reconnecting -> "正在重连…"
-        status.state == LinkState.Idle -> "未连接"
-        status.state == LinkState.Connecting -> "正在连接…"
-        status.state == LinkState.Connected -> "已连接 ${active?.name.orEmpty()}"
-        else -> "连接出错"
+        !hasNetwork -> stringResource(R.string.home_empty_title)
+        reconnecting -> stringResource(R.string.home_status_reconnecting)
+        status.state == LinkState.Idle -> stringResource(R.string.home_status_idle)
+        status.state == LinkState.Connecting -> stringResource(R.string.home_status_connecting)
+        status.state == LinkState.Connected -> stringResource(R.string.home_status_connected, active?.name.orEmpty())
+        else -> stringResource(R.string.home_status_error)
     }
     val statusSub = when {
         !hasNetwork -> ""
-        reconnecting -> "网络中断，正在重连"
-        status.state == LinkState.Idle -> "小猫在睡觉，点按钮唤醒天线"
-        status.state == LinkState.Connecting -> "竖起天线找节点"
+        reconnecting -> stringResource(R.string.home_sub_reconnecting)
+        status.state == LinkState.Idle -> stringResource(R.string.home_sub_idle)
+        status.state == LinkState.Connecting -> stringResource(R.string.home_sub_connecting)
         status.state == LinkState.Connected ->
             "${status.myIpv4 ?: "—"} · ${formatUptime(status.uptimeSec)}"
-        else -> status.error ?: "配置有问题，点开看原因"
+        else -> status.error ?: stringResource(R.string.home_sub_error)
     }
-    val buttonText = if (!hasNetwork) "创建网络" else when {
-        reconnecting -> "断开连接"
-        status.state == LinkState.Idle -> "连接"
-        status.state == LinkState.Connecting -> "取消连接"
-        status.state == LinkState.Connected -> "断开连接"
-        else -> "重试"
+    val buttonText = if (!hasNetwork) stringResource(R.string.home_create_network) else when {
+        reconnecting -> stringResource(R.string.home_btn_disconnect)
+        status.state == LinkState.Idle -> stringResource(R.string.home_btn_connect)
+        status.state == LinkState.Connecting -> stringResource(R.string.home_btn_cancel)
+        status.state == LinkState.Connected -> stringResource(R.string.home_btn_disconnect)
+        else -> stringResource(R.string.home_btn_retry)
     }
 
     LazyColumn(
@@ -96,11 +100,11 @@ fun HomeScreen(
     ) {
         item {
             ScreenHeader(
-                title = "缇喵",
+                title = stringResource(R.string.home_title),
                 action = {
                     OrbButton(
                         icon = Icons.Filled.Settings,
-                        label = "设置",
+                        label = stringResource(R.string.dock_settings),
                         onClick = { onNavigate("settings") },
                     )
                 },
@@ -111,10 +115,10 @@ fun HomeScreen(
             item {
                 val server = active!!.servers.firstOrNull().orEmpty()
                 GlassDropdownRow(
-                    label = if (server.isBlank()) "当前网络" else "当前网络 · $server",
+                    label = if (server.isBlank()) stringResource(R.string.home_current_network) else stringResource(R.string.home_current_network_server, server),
                     current = active!!,
                     options = networks,
-                    optionLabel = { it.name.ifBlank { "未命名网络" } },
+                    optionLabel = { it.name.ifBlank { unnamedNetwork } },
                     onSelect = { vm.selectNetwork(it.id) },
                     enabled = networks.size > 1,
                 )
@@ -174,12 +178,12 @@ fun HomeScreen(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = "虚拟 IP",
+                            text = stringResource(R.string.home_virtual_ip),
                             style = MaterialTheme.typography.labelSmall,
                             color = g.muted,
                         )
                         Text(
-                            text = status.myIpv4 ?: "未连接",
+                            text = status.myIpv4 ?: stringResource(R.string.home_status_idle),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
@@ -190,7 +194,7 @@ fun HomeScreen(
                         )
                     }
                     Text(
-                        text = "本机信息",
+                        text = stringResource(R.string.home_node_info),
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -209,15 +213,15 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                StatTile("上传", formatRate(status.txBps), Modifier.weight(1f))
-                StatTile("下载", formatRate(status.rxBps), Modifier.weight(1f))
-                StatTile("节点", "${status.peers.size} 只", Modifier.weight(1f))
+                StatTile(stringResource(R.string.home_upload), formatRate(status.txBps), Modifier.weight(1f))
+                StatTile(stringResource(R.string.home_download), formatRate(status.rxBps), Modifier.weight(1f))
+                StatTile(stringResource(R.string.home_peers), pluralStringResource(R.plurals.peer_count, status.peers.size, status.peers.size), Modifier.weight(1f))
             }
         }
 
         item {
             Text(
-                text = "实时速率，每秒刷新。",
+                text = stringResource(R.string.home_live_rate),
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 6.dp),
@@ -243,9 +247,9 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp).padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SectionLabel("附近节点", Modifier.weight(1f))
+                SectionLabel(stringResource(R.string.home_nearby), Modifier.weight(1f))
                 Text(
-                    text = "全部 ›",
+                    text = stringResource(R.string.home_all),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
@@ -258,7 +262,7 @@ fun HomeScreen(
         if (status.peers.isEmpty()) {
             item {
                 EmptyGlassCard(
-                    text = if (status.state == LinkState.Connected) "还没有发现节点。" else "连接后显示节点。",
+                    text = stringResource(if (status.state == LinkState.Connected) R.string.home_no_peers_connected else R.string.home_no_peers_idle),
                 )
             }
         } else {
@@ -268,7 +272,7 @@ fun HomeScreen(
                     peer = peer,
                     onClick = { onNavigate("peers") },
                     onLongClick = {
-                        peer.ipv4?.let { copyToClipboard(context, "节点 IP", it) }
+                        peer.ipv4?.let { copyToClipboard(context, context.getString(R.string.clip_peer_ip), it) }
                     },
                 )
             }

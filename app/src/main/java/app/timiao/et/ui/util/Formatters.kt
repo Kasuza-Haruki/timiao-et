@@ -1,5 +1,9 @@
 package app.timiao.et.ui.util
 
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import app.timiao.et.R
 import app.timiao.et.core.PeerInfo
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -49,51 +53,54 @@ fun PeerInfo.tunnelLabel(): String = tunnel?.takeIf { it.isNotBlank() } ?: "—"
 
 fun PeerInfo.versionLabel(): String = version?.takeIf { it.isNotBlank() } ?: "unknown"
 
-/**
- * One Chinese name for every NAT enum value. Input is the canonical English name emitted by
- * [app.timiao.et.core.StatusParser]; numeric strings are accepted as a fallback.
- */
-fun natLabel(nat: String?): String = when (nat?.trim()?.lowercase(Locale.US)) {
-    null, "" -> "—"
-    "unknown", "0" -> "未知"
-    "openinternet", "open", "1" -> "开放互联网"
-    "nopat", "2" -> "无 PAT"
-    "fullcone", "cone", "3" -> "全锥形"
-    "restricted", "4" -> "受限锥形"
-    "portrestricted", "5" -> "端口受限锥形"
-    "symmetric", "6" -> "对称 NAT"
-    "symudpfirewall", "7" -> "对称 UDP 防火墙"
-    "symmetriceasyinc", "8" -> "对称 NAT · 易增"
-    "symmetriceasydec", "9" -> "对称 NAT · 易减"
-    else -> nat ?: "—"
+/** Resource for one NAT enum value. Unknown values fall back to the raw text. */
+@StringRes
+fun natLabelRes(nat: String?): Int? = when (nat?.trim()?.lowercase(Locale.US)) {
+    null, "" -> null
+    "unknown", "0" -> R.string.nat_unknown
+    "openinternet", "open", "1" -> R.string.nat_open
+    "nopat", "2" -> R.string.nat_nopat
+    "fullcone", "cone", "3" -> R.string.nat_fullcone
+    "restricted", "4" -> R.string.nat_restricted
+    "portrestricted", "5" -> R.string.nat_portrestricted
+    "symmetric", "6" -> R.string.nat_symmetric
+    "symudpfirewall", "7" -> R.string.nat_symudpfirewall
+    "symmetriceasyinc", "8" -> R.string.nat_syminc
+    "symmetriceasydec", "9" -> R.string.nat_symdec
+    else -> null
 }
 
-/** Kernel event type -> Chinese label, following the official `cn.yaml` event names. */
-fun eventTypeLabel(type: String): String = when (type) {
-    "TunDeviceReady" -> "TUN 设备就绪"
-    "TunDeviceError" -> "TUN 设备错误"
-    "PeerAdded" -> "对端添加"
-    "PeerRemoved" -> "对端移除"
-    "PeerConnAdded" -> "对端连接添加"
-    "PeerConnRemoved" -> "对端连接移除"
-    "ListenerAdded" -> "监听器添加"
-    "ListenerAddFailed" -> "监听器添加失败"
-    "ListenerAcceptFailed" -> "监听器接受连接失败"
-    "ConnectionAccepted" -> "连接已接受"
-    "ConnectionError" -> "连接错误"
-    "Connecting" -> "正在连接"
-    "ConnectError" -> "连接错误"
-    "VpnPortalStarted" -> "VPN 门户已启动"
-    "VpnPortalClientConnected" -> "VPN 门户客户端已连接"
-    "VpnPortalClientDisconnected" -> "VPN 门户客户端已断开"
-    "DhcpIpv4Changed" -> "DHCP IPv4 地址更改"
-    "DhcpIpv4Conflicted" -> "DHCP IPv4 地址冲突"
-    "DhcpIpv6Changed" -> "DHCP IPv6 地址更改"
-    "DhcpIpv6Conflicted" -> "DHCP IPv6 地址冲突"
-    "PortForwardAdded" -> "端口转发添加"
-    "ProxyCidrsUpdated" -> "子网代理 CIDR 更新"
-    "UdpBroadcastRelayStartResult" -> "UDP 广播中继结果"
-    else -> type
+@Composable
+fun natLabel(nat: String?): String =
+    natLabelRes(nat)?.let { stringResource(it) } ?: nat ?: "—"
+
+/** Resource for a kernel event type; null means show the raw type. */
+@StringRes
+fun eventTypeLabelRes(type: String): Int? = when (type) {
+    "TunDeviceReady" -> R.string.event_tun_ready
+    "TunDeviceError" -> R.string.event_tun_error
+    "PeerAdded" -> R.string.event_peer_added
+    "PeerRemoved" -> R.string.event_peer_removed
+    "PeerConnAdded" -> R.string.event_peer_conn_added
+    "PeerConnRemoved" -> R.string.event_peer_conn_removed
+    "ListenerAdded" -> R.string.event_listener_added
+    "ListenerAddFailed" -> R.string.event_listener_add_failed
+    "ListenerAcceptFailed" -> R.string.event_listener_accept_failed
+    "ConnectionAccepted" -> R.string.event_connection_accepted
+    "ConnectionError" -> R.string.event_connection_error
+    "Connecting" -> R.string.event_connecting
+    "ConnectError" -> R.string.event_connect_error
+    "VpnPortalStarted" -> R.string.event_vpn_portal_started
+    "VpnPortalClientConnected" -> R.string.event_vpn_portal_client_connected
+    "VpnPortalClientDisconnected" -> R.string.event_vpn_portal_client_disconnected
+    "DhcpIpv4Changed" -> R.string.event_dhcp_ipv4_changed
+    "DhcpIpv4Conflicted" -> R.string.event_dhcp_ipv4_conflicted
+    "DhcpIpv6Changed" -> R.string.event_dhcp_ipv6_changed
+    "DhcpIpv6Conflicted" -> R.string.event_dhcp_ipv6_conflicted
+    "PortForwardAdded" -> R.string.event_port_forward_added
+    "ProxyCidrsUpdated" -> R.string.event_proxy_cidrs_updated
+    "UdpBroadcastRelayStartResult" -> R.string.event_udp_relay_result
+    else -> null
 }
 
 fun formatEventTime(timeMs: Long?): String {

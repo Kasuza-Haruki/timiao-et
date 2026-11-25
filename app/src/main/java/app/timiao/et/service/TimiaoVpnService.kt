@@ -74,6 +74,7 @@ class TimiaoVpnService : VpnService() {
         }
         scope.launch {
             engine.status.collectLatest { map ->
+                app.timiao.et.widget.TimiaoWidget.refresh(this@TimiaoVpnService)
                 val live = map.filterValues {
                     it.state == LinkState.Connected || it.state == LinkState.Connecting
                 }
@@ -90,7 +91,6 @@ class TimiaoVpnService : VpnService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        commandSeen = true
         Log.i(TAG, "command ${intent?.action} id=${intent?.getStringExtra(EXTRA_ID)} active=${synchronized(activeIds) { activeIds.toList() }}")
         when (intent?.action) {
             ACTION_START -> intent.getStringExtra(EXTRA_ID)?.let { id ->
@@ -102,6 +102,8 @@ class TimiaoVpnService : VpnService() {
                     return START_NOT_STICKY
                 }
                 synchronized(activeIds) { activeIds += id }
+                // After the id is registered: the collector must never see "command seen, nothing active".
+                commandSeen = true
                 ServiceState.setLast(this, id)
                 scope.launch {
                     runCatching { engine.start(id) }
@@ -287,11 +289,11 @@ class TimiaoVpnService : VpnService() {
         val month = YearMonth.now().toString()
         if (prefs.getString(KEY_WARN_MONTH, null) == month) return
         prefs.edit().putString(KEY_WARN_MONTH, month).apply()
-        notifyPolicy("移动数据提醒", "本月移动数据已超过提醒阈值（可在流量统计中修改）")
+        notifyPolicy(getString(R.string.vpn_policy_mobile_title), getString(R.string.vpn_policy_mobile_text))
     }
 
     private fun notifyPolicyBlocked() {
-        notifyPolicy("EasyTier 已暂停", MOBILE_BLOCKED_TEXT)
+        notifyPolicy(getString(R.string.vpn_paused_title), getString(R.string.vpn_paused_text))
     }
 
     private fun notifyPolicy(title: String, text: String) {
@@ -341,12 +343,12 @@ class TimiaoVpnService : VpnService() {
         val reconnecting = s?.reconnecting == true
         val connected = s?.state == LinkState.Connected && !reconnecting
         val title = when {
-            reconnecting -> "网络中断，正在重连"
+            reconnecting -> getString(R.string.vpn_reconnecting)
             connected -> getString(R.string.notif_connected)
             else -> getString(R.string.app_name)
         }
         val text = when {
-            reconnecting -> "网络中断，正在重连"
+            reconnecting -> getString(R.string.vpn_reconnecting)
             connected -> "${s?.myIpv4 ?: ""} · ↑${rate(s?.txBps ?: 0)} ↓${rate(s?.rxBps ?: 0)} · ${s?.peers?.size ?: 0}"
             else -> getString(R.string.notif_connecting)
         }
@@ -385,8 +387,6 @@ class TimiaoVpnService : VpnService() {
         private const val POLICY_NOTIF_ID = 2
         private const val POLICY_PREFS = "traffic_policy"
         private const val KEY_WARN_MONTH = "warn_month"
-        private const val MOBILE_BLOCKED_TEXT =
-            "移动数据下已暂停 EasyTier（可在流量统计中关闭此限制）"
         private const val TAG = "TimiaoVpn"
 
         /** Intent for the system VPN consent dialog, or null when consent is already granted. */

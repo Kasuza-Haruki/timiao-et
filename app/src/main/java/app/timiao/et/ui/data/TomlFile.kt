@@ -2,7 +2,9 @@ package app.timiao.et.ui.data
 
 import android.content.Context
 import android.net.Uri
+import app.timiao.et.R
 import app.timiao.et.core.NetworkConfig
+import app.timiao.et.core.TomlParseException
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
@@ -14,7 +16,7 @@ const val MAX_TOML_BYTES: Int = 1024 * 1024
 /** Decodes a TOML file as UTF-8 and strips an optional BOM. */
 fun decodeTomlBytes(bytes: ByteArray): Result<String> {
     if (bytes.size > MAX_TOML_BYTES) {
-        return Result.failure(IllegalArgumentException("文件超过 1 MB，已拒绝"))
+        return Result.failure(IllegalArgumentException("File exceeds 1 MB"))
     }
     val offset = if (bytes.size >= 3 &&
         bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()
@@ -28,14 +30,14 @@ fun decodeTomlBytes(bytes: ByteArray): Result<String> {
             .onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT)
         decoder.decode(ByteBuffer.wrap(bytes, offset, bytes.size - offset)).toString()
-    }.recoverCatching { throw IllegalArgumentException("文件不是有效的 UTF-8 文本") }
+    }.recoverCatching { throw IllegalArgumentException("File is not valid UTF-8 text") }
 }
 
 /** Reads a content URI with a 1 MB hard limit, then decodes it as UTF-8. */
 fun readTomlUri(context: Context, uri: Uri): Result<String> {
     val bytes = runCatching {
         val stream = context.contentResolver.openInputStream(uri)
-            ?: throw IllegalArgumentException("无法打开文件")
+            ?: throw IllegalArgumentException(context.getString(R.string.file_cannot_open))
         stream.use { input ->
             val buffer = ByteArray(8192)
             val output = ByteArrayOutputStream()
@@ -45,14 +47,31 @@ fun readTomlUri(context: Context, uri: Uri): Result<String> {
                 if (count < 0) break
                 total += count
                 if (total > MAX_TOML_BYTES) {
-                    throw IllegalArgumentException("文件超过 1 MB，已拒绝")
+                    throw IllegalArgumentException(context.getString(R.string.file_too_large))
                 }
                 output.write(buffer, 0, count)
             }
             output.toByteArray()
         }
     }.getOrElse { return Result.failure(it) }
-    return decodeTomlBytes(bytes)
+    if (bytes.size > MAX_TOML_BYTES) {
+        return Result.failure(IllegalArgumentException(context.getString(R.string.file_too_large)))
+    }
+    return decodeTomlBytes(bytes).recoverCatching {
+        throw IllegalArgumentException(context.getString(R.string.file_not_utf8))
+    }
+}
+
+/** Localized TOML parse message, with line and column when available. */
+fun tomlErrorMessage(context: Context, error: Throwable?): String? = when (error) {
+    null -> null
+    is TomlParseException -> context.getString(
+        R.string.toml_error_at_line,
+        error.line,
+        error.column,
+        error.reason,
+    )
+    else -> error.message
 }
 
 /** True when the imported document reuses an instance ID that is already saved. */

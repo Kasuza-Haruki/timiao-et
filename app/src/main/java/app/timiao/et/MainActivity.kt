@@ -13,7 +13,7 @@ import android.content.Intent
 import androidx.activity.result.contract.ActivityResultContracts
 import app.timiao.et.service.TimiaoVpnService
 import android.provider.Settings
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -40,7 +40,7 @@ import app.timiao.et.ui.navigation.TimiaoRoot
 import app.timiao.et.ui.theme.LocalReducedMotion
 import app.timiao.et.ui.theme.TimiaoTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private var pendingGo: (() -> Unit)? = null
     private var appViewModel: AppViewModel? = null
     private var queuedOpen: PendingOpenNetwork? = null
@@ -80,8 +80,8 @@ class MainActivity : ComponentActivity() {
                 if (existing != null) cfg = cfg.copy(instanceId = java.util.UUID.randomUUID().toString())
                 container.configRepository.save(cfg)
                 openImported(cfg.id, focusSecret = !hasSecret)
-                if (!hasSecret) android.widget.Toast.makeText(this@MainActivity, "已导入「${cfg.networkName}」，请在编辑页补填网络密钥", android.widget.Toast.LENGTH_LONG).show()
-                else android.widget.Toast.makeText(this@MainActivity, "已导入「${cfg.networkName}」", android.widget.Toast.LENGTH_SHORT).show()
+                if (!hasSecret) android.widget.Toast.makeText(this@MainActivity, getString(R.string.main_imported_missing_secret, cfg.networkName), android.widget.Toast.LENGTH_LONG).show()
+                else android.widget.Toast.makeText(this@MainActivity, getString(R.string.main_imported, cfg.networkName), android.widget.Toast.LENGTH_SHORT).show()
             }
             if (result is app.timiao.et.share.ImportIntentResult.Failure)
                 android.widget.Toast.makeText(this@MainActivity, result.message, android.widget.Toast.LENGTH_LONG).show()

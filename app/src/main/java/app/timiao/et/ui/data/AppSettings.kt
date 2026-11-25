@@ -1,6 +1,8 @@
 package app.timiao.et.ui.data
 
 import android.content.Context
+import androidx.annotation.StringRes
+import app.timiao.et.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,23 +17,23 @@ enum class ThemeMode(val key: String) {
     }
 }
 
-enum class LogLevel(val key: String, val label: String) {
-    Off("off", "关闭"),
-    Error("error", "错误"),
-    Warn("warn", "警告"),
-    Info("info", "信息"),
-    Debug("debug", "调试"),
-    Trace("trace", "跟踪");
+enum class LogLevel(val key: String, @StringRes val labelRes: Int) {
+    Off("off", R.string.log_off),
+    Error("error", R.string.log_error),
+    Warn("warn", R.string.log_warn),
+    Info("info", R.string.log_info),
+    Debug("debug", R.string.log_debug),
+    Trace("trace", R.string.log_trace);
 
     companion object {
         fun fromKey(key: String?): LogLevel = entries.firstOrNull { it.key == key } ?: Info
     }
 }
 
-enum class AppLanguage(val key: String, val label: String) {
-    System("system", "跟随系统"),
-    Chinese("zh", "简体中文"),
-    English("en", "English");
+enum class AppLanguage(val key: String, @StringRes val labelRes: Int) {
+    System("system", R.string.settings_language_system),
+    Chinese("zh", R.string.settings_language_zh),
+    English("en", R.string.settings_language_en);
 
     companion object {
         fun fromKey(key: String?): AppLanguage = entries.firstOrNull { it.key == key } ?: System

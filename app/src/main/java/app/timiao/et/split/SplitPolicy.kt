@@ -1,10 +1,13 @@
 package app.timiao.et.split
 
+import androidx.annotation.StringRes
+import app.timiao.et.R
+
 /** How the VPN routes app traffic. Mirrors the three options offered in the UI. */
-enum class SplitMode(val key: String, val label: String) {
-    All("all", "全部应用"),
-    Allow("allow", "仅选中应用"),
-    Deny("deny", "选中应用除外");
+enum class SplitMode(val key: String, @StringRes val labelRes: Int) {
+    All("all", R.string.split_mode_all),
+    Allow("allow", R.string.split_mode_allow),
+    Deny("deny", R.string.split_mode_deny);
 
     companion object {
         fun fromKey(key: String?): SplitMode? = entries.firstOrNull { it.key == key }
@@ -23,13 +26,6 @@ data class SplitPolicy(
         packages = packages.asSequence().map { it.trim() }.filter { it.isNotEmpty() }.toSet(),
     )
 
-    fun summary(): String = when (mode) {
-        SplitMode.All -> "全部应用走 EasyTier"
-        SplitMode.Allow ->
-            if (packages.isEmpty()) "尚未选择应用" else "仅 ${packages.size} 个应用走 EasyTier"
-        SplitMode.Deny ->
-            if (packages.isEmpty()) "尚未选择应用" else "${packages.size} 个应用不走 EasyTier"
-    }
 }
 
 /** The two builder calls are mutually exclusive on Android, so exactly one set is used. */

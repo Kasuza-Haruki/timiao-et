@@ -1,5 +1,8 @@
 package app.timiao.et.auto
 
+import androidx.annotation.StringRes
+import app.timiao.et.R
+
 /**
  * Pure rule model and matcher. No Android API here, so JVM unit tests cover it.
  *
@@ -10,11 +13,15 @@ package app.timiao.et.auto
 
 enum class NetType { None, Wifi, Cellular, Other }
 
-enum class AutoCondition(val key: String, val label: String, val shortLabel: String) {
-    Always("always", "总是连接", "总是"),
-    WifiOnly("wifi_only", "仅在这些 Wi-Fi 下连接", "仅 Wi-Fi"),
-    CellularOnly("cellular_only", "仅移动数据时连接", "仅移动"),
-    ExceptWifi("except_wifi", "在这些 Wi-Fi 下不连接", "排除 Wi-Fi");
+enum class AutoCondition(
+    val key: String,
+    @StringRes val labelRes: Int,
+    @StringRes val shortLabelRes: Int,
+) {
+    Always("always", R.string.auto_cond_always, R.string.auto_cond_always_short),
+    WifiOnly("wifi_only", R.string.auto_cond_wifi_only, R.string.auto_cond_wifi_only_short),
+    CellularOnly("cellular_only", R.string.auto_cond_cellular_only, R.string.auto_cond_cellular_only_short),
+    ExceptWifi("except_wifi", R.string.auto_cond_except_wifi, R.string.auto_cond_except_wifi_short);
 
     /** True when the condition compares the current SSID against a list. */
     val needsSsid: Boolean get() = this == WifiOnly || this == ExceptWifi
@@ -47,10 +54,10 @@ data class NetworkSnapshot(
 
 enum class RuleAction { Connect, Disconnect, Skip }
 
-enum class SkipReason(val label: String) {
-    NoNetwork("当前无网络"),
-    SsidUnavailable("无法读取 Wi-Fi 名称，需要定位权限"),
-    NoRule("没有启用的自动规则"),
+enum class SkipReason(@StringRes val labelRes: Int) {
+    NoNetwork(R.string.auto_skip_no_network),
+    SsidUnavailable(R.string.auto_skip_ssid),
+    NoRule(R.string.auto_skip_no_rule),
 }
 
 sealed interface AutoDecision {

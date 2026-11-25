@@ -1,12 +1,14 @@
 package app.timiao.et.traffic
 
+import androidx.annotation.StringRes
+import app.timiao.et.R
 import java.time.LocalDate
 
 /** Where the traffic went. Mobile means the system's active network is cellular. */
-enum class NetworkKind(val label: String) {
-    WIFI("Wi-Fi"),
-    MOBILE("移动数据"),
-    OTHER("其他"),
+enum class NetworkKind(@StringRes val labelRes: Int) {
+    WIFI(R.string.traffic_wifi),
+    MOBILE(R.string.traffic_mobile),
+    OTHER(R.string.traffic_other),
 }
 
 data class BytePair(val tx: Long = 0, val rx: Long = 0) {

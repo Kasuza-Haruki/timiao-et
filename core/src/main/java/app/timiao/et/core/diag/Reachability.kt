@@ -13,12 +13,18 @@ import java.net.Socket
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
-/** Outcome of probing one `[[peer]]` URI. */
+/** Outcome of probing one `[[peer]]` URI. Reasons are text keys, resolved by the app. */
 public sealed interface PeerProbeResult {
     public data class Reachable(val latencyMs: Long) : PeerProbeResult
-    public data class Unreachable(val reason: String) : PeerProbeResult
+    public data class Unreachable(
+        val reasonKey: String,
+        val args: List<String> = emptyList(),
+    ) : PeerProbeResult
     /** The probe could not decide, e.g. plain UDP without a response. */
-    public data class Inconclusive(val reason: String) : PeerProbeResult
+    public data class Inconclusive(
+        val reasonKey: String,
+        val args: List<String> = emptyList(),
+    ) : PeerProbeResult
 }
 
 /** Injectable so unit tests never touch the network. */
@@ -36,12 +42,15 @@ public object DefaultPeerReachabilityProbe : PeerReachabilityProbe {
 
     override suspend fun probe(uri: String): PeerProbeResult = withContext(Dispatchers.IO) {
         when (val parsed = parsePeerUri(uri)) {
-            is PeerUri.Invalid -> PeerProbeResult.Unreachable(parsed.reason)
+            is PeerUri.Invalid -> PeerProbeResult.Unreachable(parsed.reasonKey, parsed.args)
             is PeerUri.Endpoint -> {
                 val host = parsed.host
                 val port = parsed.port
                 if (host == null || port == null) {
-                    PeerProbeResult.Inconclusive(parsed.note ?: "无法直接探测该地址")
+                    PeerProbeResult.Inconclusive(
+                        parsed.noteKey ?: "diag_probe_cannot_probe",
+                        parsed.noteArgs,
+                    )
                 } else if (parsed.tcp) {
                     tcpProbe(host, port)
                 } else {
@@ -60,17 +69,23 @@ public object DefaultPeerReachabilityProbe : PeerReachabilityProbe {
             val elapsed = ((System.nanoTime() - started) / 1_000_000).coerceAtLeast(1)
             PeerProbeResult.Reachable(elapsed)
         } catch (_: UnknownHostException) {
-            PeerProbeResult.Unreachable("域名无法解析")
+            PeerProbeResult.Unreachable("diag_probe_unknown_host")
         } catch (_: SocketTimeoutException) {
-            PeerProbeResult.Unreachable("连接超时（3 秒），服务器不可达或被防火墙丢弃")
+            PeerProbeResult.Unreachable("diag_probe_timeout")
         } catch (_: ConnectException) {
-            PeerProbeResult.Unreachable("连接被拒绝，端口未开放或被防火墙拦截")
+            PeerProbeResult.Unreachable("diag_probe_refused")
         } catch (_: NoRouteToHostException) {
-            PeerProbeResult.Unreachable("主机不可达，地址或路由错误")
+            PeerProbeResult.Unreachable("diag_probe_no_route")
         } catch (e: IOException) {
-            PeerProbeResult.Unreachable("网络错误：${e.message ?: e.javaClass.simpleName}")
+            PeerProbeResult.Unreachable(
+                "diag_probe_io",
+                listOf(e.message ?: e.javaClass.simpleName),
+            )
         } catch (e: SecurityException) {
-            PeerProbeResult.Unreachable("没有网络访问权限：${e.message ?: "SecurityException"}")
+            PeerProbeResult.Unreachable(
+                "diag_probe_security",
+                listOf(e.message ?: "SecurityException"),
+            )
         }
     }
 
@@ -86,13 +101,19 @@ public object DefaultPeerReachabilityProbe : PeerReachabilityProbe {
                 PeerProbeResult.Reachable(0)
             }
         } catch (_: SocketTimeoutException) {
-            PeerProbeResult.Inconclusive("已发送 UDP 探测包，但没有收到回应；UDP 无回应也可能正常")
+            PeerProbeResult.Inconclusive("diag_probe_udp_no_reply")
         } catch (_: UnknownHostException) {
-            PeerProbeResult.Unreachable("域名无法解析")
+            PeerProbeResult.Unreachable("diag_probe_unknown_host")
         } catch (e: IOException) {
-            PeerProbeResult.Inconclusive("UDP 探测未能完成：${e.message ?: "网络错误"}")
+            PeerProbeResult.Inconclusive(
+                "diag_probe_udp_incomplete",
+                listOf(e.message ?: "network error"),
+            )
         } catch (e: SecurityException) {
-            PeerProbeResult.Unreachable("没有网络访问权限：${e.message ?: "SecurityException"}")
+            PeerProbeResult.Unreachable(
+                "diag_probe_security",
+                listOf(e.message ?: "SecurityException"),
+            )
         }
     }
 }

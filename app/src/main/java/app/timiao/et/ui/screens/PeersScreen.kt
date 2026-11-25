@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.timiao.et.R
 import app.timiao.et.core.PeerConn
 import app.timiao.et.core.PeerInfo
 import app.timiao.et.ui.AppViewModel
@@ -133,11 +135,11 @@ fun PeersScreen(
     ) {
         item {
             ScreenHeader(
-                title = "节点",
-                subtitle = active?.let { "${it.name} · ${status.peers.size} 只" } ?: "未选择网络",
+                title = stringResource(R.string.peers_title),
+                subtitle = active?.let { stringResource(R.string.peers_subtitle_with_count, it.name, status.peers.size) } ?: stringResource(R.string.peers_subtitle_no_net),
                 action = {
                     GlassPillAction(
-                        text = "日志",
+                        text = stringResource(R.string.peers_log),
                         icon = Icons.Filled.List,
                         onClick = { onNavigate(Routes.EVENT_LOG) },
                     )
@@ -146,7 +148,7 @@ fun PeersScreen(
         }
         item {
             SegmentedGlass(
-                options = listOf("列表", "拓扑"),
+                options = listOf(stringResource(R.string.peers_list), stringResource(R.string.peers_topology)),
                 selected = mode,
                 onSelect = { mode = it },
             )
@@ -155,12 +157,16 @@ fun PeersScreen(
             GlassSearchField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = "搜索主机名或 IP",
+                placeholder = stringResource(R.string.search_host_or_ip),
             )
         }
         item {
             SegmentedGlass(
-                options = listOf("全部 ${status.peers.size}", "直连 $directCount", "中继 $relayCount"),
+                options = listOf(
+                    stringResource(R.string.peers_filter_all, status.peers.size),
+                    stringResource(R.string.peers_filter_direct, directCount),
+                    stringResource(R.string.peers_filter_relay, relayCount),
+                ),
                 selected = filter,
                 onSelect = { filter = it },
             )
@@ -171,8 +177,8 @@ fun PeersScreen(
                 item {
                     EmptyGlassCard(
                         text = when {
-                            status.peers.isEmpty() -> "还没有节点。连接网络后显示。"
-                            else -> "没有匹配的节点。"
+                            status.peers.isEmpty() -> stringResource(R.string.peers_empty)
+                            else -> stringResource(R.string.peers_no_match)
                         },
                     )
                 }
@@ -183,7 +189,7 @@ fun PeersScreen(
                         peer = peer,
                         onClick = { selectedKey = peer.stableKey() },
                         onLongClick = {
-                            peer.ipv4?.let { copyToClipboard(context, "节点 IP", it) }
+                            peer.ipv4?.let { copyToClipboard(context, context.getString(R.string.clip_peer_ip), it) }
                         },
                     )
                 }
@@ -200,7 +206,7 @@ fun PeersScreen(
 
         item {
             Text(
-                text = "长按节点可复制 IP。",
+                text = stringResource(R.string.peers_long_press_copy),
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 6.dp),
@@ -218,7 +224,7 @@ fun PeersScreen(
             PeerDetail(
                 peer = peer,
                 onCopy = {
-                    peer.ipv4?.let { copyToClipboard(context, "节点 IP", it) }
+                    peer.ipv4?.let { copyToClipboard(context, context.getString(R.string.clip_peer_ip), it) }
                 },
                 actions = { actions(peer) },
             )
@@ -263,29 +269,29 @@ private fun PeerDetail(
                 .glass(RoundedCornerShape(20.dp), GlassLevel.Subtle)
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
-            InfoRow("IP", peer.ipv4 ?: "—")
+            InfoRow(stringResource(R.string.peers_info_ip), peer.ipv4 ?: "—")
             InfoRow("IPv6", peer.ipv6 ?: "—")
-            InfoRow("延迟", peer.latencyMs?.let { "${it.toInt()} ms" } ?: "—")
-            InfoRow("丢包", peer.lossRate?.let { String.format(Locale.US, "%.1f%%", it) } ?: "—")
+            InfoRow(stringResource(R.string.peers_info_latency), peer.latencyMs?.let { "${it.toInt()} ms" } ?: "—")
+            InfoRow(stringResource(R.string.peers_info_loss), peer.lossRate?.let { String.format(Locale.US, "%.1f%%", it) } ?: "—")
             InfoRow("NAT", natLabel(peer.natType))
             InfoRow("TCP NAT", natLabel(peer.tcpNatType))
-            InfoRow("隧道", peer.tunnelLabel())
-            InfoRow("版本", peer.versionLabel())
-            InfoRow("路由", peer.costLabel())
-            InfoRow("发送", formatBytes(peer.txBytes))
-            InfoRow("接收", formatBytes(peer.rxBytes))
+            InfoRow(stringResource(R.string.peers_info_tunnel), peer.tunnelLabel())
+            InfoRow(stringResource(R.string.peers_info_version), peer.versionLabel())
+            InfoRow(stringResource(R.string.peers_info_route), peer.costLabel())
+            InfoRow(stringResource(R.string.peers_info_tx), formatBytes(peer.txBytes))
+            InfoRow(stringResource(R.string.peers_info_rx), formatBytes(peer.rxBytes))
             if (peer.isPublicServer) {
-                InfoRow("标记", "公网服务器")
+                InfoRow(stringResource(R.string.peers_info_tag), stringResource(R.string.peers_public_server))
             }
             if (peer.avoidRelayData) {
-                InfoRow("标记", "避免中继数据")
+                InfoRow(stringResource(R.string.peers_info_tag), stringResource(R.string.peers_avoid_relay_data))
             }
         }
 
         if (peer.conns.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
             Text(
-                text = "连接 (${peer.conns.size})",
+                text = stringResource(R.string.peers_connections, peer.conns.size),
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = g.muted,
             )
@@ -299,7 +305,7 @@ private fun PeerDetail(
         actions()
         Spacer(Modifier.height(12.dp))
         PillButton(
-            text = "复制 IP",
+            text = stringResource(R.string.peers_copy_ip),
             onClick = onCopy,
             enabled = peer.ipv4 != null,
             secondary = true,
@@ -319,14 +325,14 @@ private fun ConnCard(index: Int, conn: PeerConn) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "连接 ${index + 1}",
+                text = stringResource(R.string.peers_connection_n, index + 1),
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface,
             )
             if (conn.isDefault) {
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "默认",
+                    text = stringResource(R.string.peers_default),
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -338,12 +344,12 @@ private fun ConnCard(index: Int, conn: PeerConn) {
                 color = g.muted,
             )
         }
-        InfoRow("本地", conn.localAddr ?: "—")
-        InfoRow("远端", conn.remoteAddr ?: "—")
-        InfoRow("延迟", conn.latencyMs?.let { "${it.toInt()} ms" } ?: "—")
-        InfoRow("丢包", conn.lossRate?.let { String.format(Locale.US, "%.1f%%", it) } ?: "—")
-        InfoRow("发送", formatBytes(conn.txBytes))
-        InfoRow("接收", formatBytes(conn.rxBytes))
+        InfoRow(stringResource(R.string.peers_local), conn.localAddr ?: "—")
+        InfoRow(stringResource(R.string.peers_remote), conn.remoteAddr ?: "—")
+        InfoRow(stringResource(R.string.peers_info_latency), conn.latencyMs?.let { "${it.toInt()} ms" } ?: "—")
+        InfoRow(stringResource(R.string.peers_info_loss), conn.lossRate?.let { String.format(Locale.US, "%.1f%%", it) } ?: "—")
+        InfoRow(stringResource(R.string.peers_info_tx), formatBytes(conn.txBytes))
+        InfoRow(stringResource(R.string.peers_info_rx), formatBytes(conn.rxBytes))
     }
 }
 
@@ -363,6 +369,10 @@ private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myPeerId: Strin
         fontSize = 14.sp,
         fontWeight = FontWeight.Black,
     )
+    val rootLabel = stringResource(R.string.topology_this_device)
+    val offlineLabel = stringResource(R.string.topology_not_connected)
+    val peerFallback = stringResource(R.string.topology_peer_fallback)
+    val relaySuffix = stringResource(R.string.topology_relay_suffix)
     val peerPalette = listOf(
         Color(0xFF7CC6A4), Color(0xFF8FB6FF), Color(0xFFC39BFF),
         Color(0xFFF0A96B), Color(0xFFE58FA8), Color(0xFF74B9C9),
@@ -372,7 +382,13 @@ private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myPeerId: Strin
         val widthDp = maxWidth.value
         // Recomputed once per poll (or width/font-scale change); positions are pure data.
         val layout = remember(peers, myIpv4, myPeerId, widthDp, density.fontScale) {
-            TopologyLayout.layout(peers, myIpv4, myPeerId, widthDp, density.fontScale)
+            TopologyLayout.layout(
+                peers, myIpv4, myPeerId, widthDp, density.fontScale,
+                rootLabel = rootLabel,
+                offlineLabel = offlineLabel,
+                peerFallback = peerFallback,
+                relaySuffix = relaySuffix,
+            )
         }
         Column(
             modifier = Modifier
@@ -507,7 +523,7 @@ private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myPeerId: Strin
             }
             if (peers.isEmpty()) {
                 Text(
-                    text = "还没有节点。连接后显示。",
+                    text = stringResource(R.string.peers_empty_topology),
                     style = MaterialTheme.typography.labelSmall,
                     color = g.muted,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -527,7 +543,7 @@ private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myPeerId: Strin
                     )
                 }
                 Spacer(Modifier.width(5.dp))
-                Text("直连", style = MaterialTheme.typography.labelSmall, color = g.muted)
+                Text(stringResource(R.string.peers_direct), style = MaterialTheme.typography.labelSmall, color = g.muted)
                 Spacer(Modifier.width(16.dp))
                 Canvas(Modifier.size(width = 24.dp, height = 8.dp)) {
                     drawLine(
@@ -541,7 +557,7 @@ private fun TopologyCard(peers: List<PeerInfo>, myIpv4: String?, myPeerId: Strin
                     )
                 }
                 Spacer(Modifier.width(5.dp))
-                Text("中继", style = MaterialTheme.typography.labelSmall, color = g.muted)
+                Text(stringResource(R.string.peers_relay), style = MaterialTheme.typography.labelSmall, color = g.muted)
             }
         }
     }

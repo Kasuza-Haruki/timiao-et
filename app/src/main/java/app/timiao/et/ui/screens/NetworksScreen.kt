@@ -33,11 +33,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.timiao.et.R
 import app.timiao.et.core.LinkState
 import app.timiao.et.ui.AppViewModel
 import app.timiao.et.ui.components.AvatarBadge
@@ -54,6 +57,7 @@ import app.timiao.et.ui.data.UiNetwork
 import app.timiao.et.ui.data.hasInstanceIdConflict
 import app.timiao.et.ui.data.readTomlUri
 import app.timiao.et.ui.data.resolveImportId
+import app.timiao.et.ui.data.tomlErrorMessage
 import app.timiao.et.ui.theme.LocalGlassColors
 import kotlinx.coroutines.launch
 
@@ -97,7 +101,7 @@ fun NetworksScreen(
                     openImport(imported, saveAsNew = false)
                 }
             }.onFailure {
-                importFailure = it.message ?: "解析失败"
+                importFailure = tomlErrorMessage(context, it) ?: context.getString(R.string.networks_parse_failed)
             }
         }
     }
@@ -107,7 +111,7 @@ fun NetworksScreen(
             scope.launch {
                 readTomlUri(context, uri)
                     .onSuccess(::importText)
-                    .onFailure { importFailure = it.message ?: "读取文件失败" }
+                    .onFailure { importFailure = tomlErrorMessage(context, it) ?: context.getString(R.string.networks_read_failed) }
             }
         }
     }
@@ -120,12 +124,12 @@ fun NetworksScreen(
     ) {
         item {
             ScreenHeader(
-                title = "网络",
-                subtitle = "${networks.size} 个网络",
+                title = stringResource(R.string.networks_title),
+                subtitle = pluralStringResource(R.plurals.networks_count, networks.size, networks.size),
                 action = {
                     OrbButton(
                         icon = Icons.Filled.Add,
-                        label = "新建网络",
+                        label = stringResource(R.string.networks_new),
                         onClick = { onNavigate("network/new") },
                     )
                 },
@@ -133,7 +137,7 @@ fun NetworksScreen(
         }
         item {
             Text(
-                text = "点击网络可编辑配置，长按删除。",
+                text = stringResource(R.string.networks_hint),
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 6.dp),
@@ -141,7 +145,7 @@ fun NetworksScreen(
         }
         item {
             PillButton(
-                text = "从文件导入",
+                text = stringResource(R.string.networks_import_file),
                 onClick = {
                     openFile.launch(
                         arrayOf("text/*", "application/toml", "application/octet-stream", "*/*"),
@@ -155,8 +159,8 @@ fun NetworksScreen(
         if (networks.isEmpty()) {
             item {
                 EmptyGlassCard(
-                    text = "还没有网络。创建一个，让小猫出门找朋友。",
-                    actionText = "新建网络",
+                    text = stringResource(R.string.networks_empty),
+                    actionText = stringResource(R.string.networks_new),
                     onAction = { onNavigate("network/new") },
                 )
             }
@@ -183,13 +187,13 @@ fun NetworksScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 PillButton(
-                    text = "导入 TOML",
+                    text = stringResource(R.string.networks_import_toml),
                     onClick = { onNavigate("network/new?open=import") },
                     secondary = true,
                     modifier = Modifier.weight(1f),
                 )
                 PillButton(
-                    text = "扫码导入",
+                    text = stringResource(R.string.networks_scan),
                     onClick = { onNavigate("network/new?open=scan") },
                     secondary = true,
                     modifier = Modifier.weight(1f),
@@ -200,9 +204,9 @@ fun NetworksScreen(
 
     deleteTarget?.let { target ->
         ConfirmDialog(
-            title = "删除网络",
-            text = "确定删除「${target.name}」？此操作不可撤销。",
-            confirmText = "删除",
+            title = stringResource(R.string.networks_delete_title),
+            text = stringResource(R.string.networks_delete_text, target.name),
+            confirmText = stringResource(R.string.action_delete),
             onConfirm = {
                 vm.deleteNetwork(target.id)
                 deleteTarget = null
@@ -214,20 +218,19 @@ fun NetworksScreen(
     pendingImport?.let { imported ->
         AlertDialog(
             onDismissRequest = { pendingImport = null },
-            title = { Text("已有同 ID 网络") },
+            title = { Text(stringResource(R.string.networks_conflict_title)) },
             text = {
                 Text(
-                    "本机已有 instance_id 为「${imported.base?.instanceId}」的网络。覆盖会替换该网络；" +
-                        "另存为新网络会生成新的 instance_id，避免与对方实例冲突。",
+                    stringResource(R.string.networks_conflict_text, imported.base?.instanceId.orEmpty()),
                 )
             },
             confirmButton = {
                 TextButton(onClick = { openImport(imported, saveAsNew = true) }) {
-                    Text("另存为新网络")
+                    Text(stringResource(R.string.networks_save_as_new))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { openImport(imported, saveAsNew = false) }) { Text("覆盖") }
+                TextButton(onClick = { openImport(imported, saveAsNew = false) }) { Text(stringResource(R.string.action_overwrite)) }
             },
             containerColor = MaterialTheme.colorScheme.surface,
         )
@@ -236,10 +239,10 @@ fun NetworksScreen(
     importFailure?.let { message ->
         AlertDialog(
             onDismissRequest = { importFailure = null },
-            title = { Text("导入失败") },
+            title = { Text(stringResource(R.string.networks_import_failed)) },
             text = { Text(message) },
             confirmButton = {
-                TextButton(onClick = { importFailure = null }) { Text("关闭") }
+                TextButton(onClick = { importFailure = null }) { Text(stringResource(R.string.action_close)) }
             },
             containerColor = MaterialTheme.colorScheme.surface,
         )
@@ -258,10 +261,10 @@ private fun NetworkCard(
 ) {
     val g = LocalGlassColors.current
     val stateText = when (state) {
-        LinkState.Connected -> "已连接"
-        LinkState.Connecting -> "连接中"
-        LinkState.Error -> "出错"
-        LinkState.Idle -> "未连接"
+        LinkState.Connected -> stringResource(R.string.networks_state_connected)
+        LinkState.Connecting -> stringResource(R.string.networks_state_connecting)
+        LinkState.Error -> stringResource(R.string.networks_state_error)
+        LinkState.Idle -> stringResource(R.string.networks_state_idle)
     }
     val stateColor = when (state) {
         LinkState.Connected -> g.good
@@ -282,7 +285,7 @@ private fun NetworkCard(
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = network.name.ifBlank { "未命名网络" },
+                    text = network.name.ifBlank { stringResource(R.string.networks_unnamed) },
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -291,7 +294,7 @@ private fun NetworkCard(
                 if (active) {
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "当前",
+                        text = stringResource(R.string.networks_current),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier
@@ -302,14 +305,14 @@ private fun NetworkCard(
                 }
             }
             Text(
-                text = network.servers.firstOrNull() ?: "未设置服务器",
+                text = network.servers.firstOrNull() ?: stringResource(R.string.networks_no_server),
                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                 color = g.muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "$stateText · $peerCount 只节点 · ${network.flags.count { it.value }} 个选项",
+                text = pluralStringResource(R.plurals.networks_summary, peerCount, stateText, peerCount, network.flags.count { it.value }),
                 style = MaterialTheme.typography.labelSmall,
                 color = stateColor,
                 maxLines = 1,
