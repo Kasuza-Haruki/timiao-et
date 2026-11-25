@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.timiao.et.core.LinkState
 import app.timiao.et.ui.AppViewModel
 import app.timiao.et.ui.components.CatMascot
+import app.timiao.et.ui.components.ClickableGlassRow
 import app.timiao.et.ui.components.DockInset
 import app.timiao.et.ui.components.EmptyGlassCard
 import app.timiao.et.ui.components.GlassDropdownRow
@@ -41,10 +43,12 @@ import app.timiao.et.ui.components.ScreenHeader
 import app.timiao.et.ui.components.SectionLabel
 import app.timiao.et.ui.components.StatTile
 import app.timiao.et.ui.components.glass
+import app.timiao.et.ui.navigation.Routes
 import app.timiao.et.ui.theme.LocalGlassColors
 import app.timiao.et.ui.util.copyToClipboard
 import app.timiao.et.ui.util.formatRate
 import app.timiao.et.ui.util.formatUptime
+import app.timiao.et.ui.util.stableKey
 import androidx.compose.foundation.shape.RoundedCornerShape
 
 @Composable
@@ -154,6 +158,46 @@ fun HomeScreen(
         }
 
         item {
+            ClickableGlassRow(onClick = { onNavigate(Routes.NODE_INFO) }) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = "虚拟 IP",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = g.muted,
+                        )
+                        Text(
+                            text = status.myIpv4 ?: "未连接",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Text(
+                        text = "本机信息",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.size(6.dp))
+                    Text(
+                        text = "›",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = g.muted,
+                    )
+                }
+            }
+        }
+
+        item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -162,6 +206,15 @@ fun HomeScreen(
                 StatTile("下载", formatRate(status.rxBps), Modifier.weight(1f))
                 StatTile("节点", "${status.peers.size} 只", Modifier.weight(1f))
             }
+        }
+
+        item {
+            Text(
+                text = "速率 = 1 秒字节增量，指数平滑 α=0.4。",
+                style = MaterialTheme.typography.labelSmall,
+                color = g.muted,
+                modifier = Modifier.padding(horizontal = 6.dp),
+            )
         }
 
         if (status.state == LinkState.Error && status.error != null) {
@@ -202,8 +255,8 @@ fun HomeScreen(
                 )
             }
         } else {
-            items(status.peers.take(3).size) { index ->
-                val peer = status.peers[index]
+            // Stable keys keep the 3-row preview from recomposing as a block every second.
+            items(items = status.peers.take(3), key = { it.stableKey() }) { peer ->
                 PeerRow(
                     peer = peer,
                     onClick = { onNavigate("peers") },
