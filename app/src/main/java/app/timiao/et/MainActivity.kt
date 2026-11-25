@@ -7,6 +7,9 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
+import android.content.Intent
 import androidx.activity.result.contract.ActivityResultContracts
 import app.timiao.et.service.TimiaoVpnService
 import android.provider.Settings
@@ -54,6 +57,29 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleImportIntent(intent)
+    }
+
+    /** timiao://import links and shared/opened .toml files. Saved without the secret if the link had none. */
+    private fun handleImportIntent(intent: Intent?) {
+        val container = (application as TimiaoApplication).container
+        lifecycleScope.launch {
+            val result = app.timiao.et.share.ImportIntents.handle(this@MainActivity, intent) { toml, hasSecret ->
+                var cfg = container.configRepository.importToml(toml)
+                // Never reuse someone else's instance id: two devices with one id collide.
+                val existing = container.configRepository.get(cfg.id)
+                if (existing != null) cfg = cfg.copy(instanceId = java.util.UUID.randomUUID().toString())
+                container.configRepository.save(cfg)
+                if (!hasSecret) android.widget.Toast.makeText(this@MainActivity, "已导入「${cfg.networkName}」，请在编辑页补填网络密钥", android.widget.Toast.LENGTH_LONG).show()
+                else android.widget.Toast.makeText(this@MainActivity, "已导入「${cfg.networkName}」", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            if (result is app.timiao.et.share.ImportIntentResult.Failure)
+                android.widget.Toast.makeText(this@MainActivity, result.message, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -61,6 +87,7 @@ class MainActivity : ComponentActivity() {
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         val container = (application as TimiaoApplication).container
+        handleImportIntent(intent)
         setContent {
             val vm: AppViewModel = viewModel(factory = AppViewModel.factory(container))
             vm.ensureVpnConsent = ::ensureVpnConsent

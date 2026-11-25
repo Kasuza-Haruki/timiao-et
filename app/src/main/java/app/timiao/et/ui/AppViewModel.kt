@@ -28,7 +28,10 @@ class AppViewModel(
     private val engine: Engine,
     private val repository: ConfigRepository,
     private val settingsStore: SettingsStore,
+    val trafficRecorder: app.timiao.et.traffic.TrafficRecorder? = null,
 ) : ViewModel() {
+
+    suspend fun rawConfig(id: String) = repository.get(id)
 
     val settings: StateFlow<AppSettings> = settingsStore.settings
 
@@ -140,7 +143,7 @@ class AppViewModel(
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    AppViewModel(container.engine, container.configRepository, container.settingsStore) as T
+                    AppViewModel(container.engine, container.configRepository, container.settingsStore, container.trafficRecorder) as T
             }
     }
 }

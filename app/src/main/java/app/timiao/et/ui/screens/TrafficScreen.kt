@@ -401,7 +401,7 @@ private fun rememberNetworkKind(): NetworkKind {
     return kind
 }
 
-private fun currentNetworkKind(manager: ConnectivityManager?): NetworkKind {
+internal fun currentNetworkKind(manager: ConnectivityManager?): NetworkKind {
     if (manager == null) return NetworkKind.OTHER
     val active = manager.activeNetwork ?: return NetworkKind.OTHER
     val caps = manager.getNetworkCapabilities(active) ?: return NetworkKind.OTHER

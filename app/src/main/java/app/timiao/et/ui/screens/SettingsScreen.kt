@@ -6,6 +6,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.rotate
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -20,6 +24,7 @@ import app.timiao.et.BuildConfig
 import app.timiao.et.ui.AppViewModel
 import app.timiao.et.ui.components.DockInset
 import app.timiao.et.ui.components.GlassDropdownRow
+import app.timiao.et.ui.components.ClickableGlassRow
 import app.timiao.et.ui.components.GlassLevel
 import app.timiao.et.ui.components.GlassSwitchRow
 import app.timiao.et.ui.components.InfoRow
@@ -36,7 +41,7 @@ import app.timiao.et.ui.theme.LocalReducedMotion
 const val KERNEL_TAG = "v2.7.1"
 
 @Composable
-fun SettingsScreen(vm: AppViewModel) {
+fun SettingsScreen(vm: AppViewModel, onOpen: (String) -> Unit = {}) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val g = LocalGlassColors.current
     val reduced = LocalReducedMotion.current
@@ -47,6 +52,12 @@ fun SettingsScreen(vm: AppViewModel) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item { ScreenHeader(title = "设置", subtitle = "外观、语言与关于") }
+
+        item { SectionLabel("连接与工具") }
+        item { AutoRulesEntryRow { onOpen(AUTO_RULES_ROUTE) } }
+        item { NavRow("按应用分流", "选择哪些应用走 EasyTier（对所有网络生效）") { onOpen(SplitRoutes.of(app.timiao.et.split.SplitStore.GLOBAL_ID)) } }
+        item { NavRow("网络诊断", "一键检查为什么连不上或很慢") { onOpen("diagnostics") } }
+        item { NavRow("流量统计", "今日 / 本月用量与移动数据限制") { onOpen("traffic") } }
 
         item { SectionLabel("外观") }
         item {
@@ -102,6 +113,7 @@ fun SettingsScreen(vm: AppViewModel) {
         }
 
         item { SectionLabel("关于") }
+        item { UpdateCard(currentVersion = BuildConfig.VERSION_NAME, currentKernel = KERNEL_TAG) }
         item {
             Column(
                 modifier = Modifier
@@ -121,6 +133,35 @@ fun SettingsScreen(vm: AppViewModel) {
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun NavRow(title: String, subtitle: String, onClick: () -> Unit) {
+    val g = LocalGlassColors.current
+    ClickableGlassRow(onClick = onClick) {
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = g.muted)
+            }
+            androidx.compose.material3.Icon(
+                Icons.Filled.KeyboardArrowDown,
+                contentDescription = null,
+                tint = g.muted,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .size(20.dp)
+                    .rotate(-90f),
             )
         }
     }
