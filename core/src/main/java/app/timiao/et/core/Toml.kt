@@ -45,10 +45,37 @@ internal fun deepCopy(value: TomlValue): TomlValue = when (value) {
     else -> value
 }
 
+/** A syntax error at a byte offset in the decoded document. */
+internal class TomlSyntaxError(val position: Int, message: String) : Exception(message)
+
+/** User-facing TOML error. [line] and [column] are 1-based. */
+public class TomlParseException(
+    public val line: Int,
+    public val column: Int,
+    message: String,
+) : IllegalArgumentException(message)
+
+internal fun tomParseException(text: String, error: TomlSyntaxError): TomlParseException {
+    val offset = error.position.coerceIn(0, text.length)
+    var line = 1
+    var lineStart = 0
+    for (index in 0 until offset) {
+        if (text[index] == '\n') {
+            line++
+            lineStart = index + 1
+        }
+    }
+    val column = offset - lineStart + 1
+    val reason = error.message.orEmpty().replace(Regex("""\s+at \d+$"""), "")
+    return TomlParseException(line, column, "第 $line 行第 $column 列：$reason")
+}
+
 internal class TomlParser(private val src: String) {
     private var pos = 0
     private val root = LinkedHashMap<String, TomlValue>()
     private var current: MutableMap<String, TomlValue> = root
+
+    private fun fail(message: String): Nothing = throw TomlSyntaxError(pos, message)
 
     fun parse(): TomlTable {
         if (src.startsWith("﻿")) pos = 1
@@ -108,10 +135,10 @@ internal class TomlParser(private val src: String) {
                 is TomlValue.Tbl -> existing.entries
                 is TomlValue.Arr -> {
                     val last = existing.items.lastOrNull() as? TomlValue.Tbl
-                        ?: error("cannot enter non-table array '$segment' at $pos")
+                        ?: fail("cannot enter non-table array '$segment' at $pos")
                     last.entries
                 }
-                else -> error("key '$segment' is not a table at $pos")
+                else -> fail("key '$segment' is not a table at $pos")
             }
         }
         return table
@@ -129,15 +156,15 @@ internal class TomlParser(private val src: String) {
                 }
                 is TomlValue.Tbl -> existing.entries
                 is TomlValue.Arr -> (existing.items.lastOrNull() as? TomlValue.Tbl)?.entries
-                    ?: error("cannot enter non-table array '$segment' at $pos")
-                else -> error("key '$segment' is not a table at $pos")
+                    ?: fail("cannot enter non-table array '$segment' at $pos")
+                else -> fail("key '$segment' is not a table at $pos")
             }
         }
         val name = path.last()
         val array = when (val existing = table[name]) {
             null -> TomlValue.Arr().also { table[name] = it }
             is TomlValue.Arr -> existing
-            else -> error("key '$name' is not an array of tables at $pos")
+            else -> fail("key '$name' is not an array of tables at $pos")
         }
         val child = LinkedHashMap<String, TomlValue>()
         array.items.add(TomlValue.Tbl(child))
@@ -159,7 +186,7 @@ internal class TomlParser(private val src: String) {
     }
 
     private fun parseKeyToken(): String {
-        if (eof()) error("expected key at $pos")
+        if (eof()) fail("expected key at $pos")
         val c = src[pos]
         if (c == '"' || c == '\'') return parseString()
         val start = pos
@@ -167,7 +194,7 @@ internal class TomlParser(private val src: String) {
             val ch = src[pos]
             if (ch.isLetterOrDigit() || ch == '_' || ch == '-') pos++ else break
         }
-        if (start == pos) error("expected key at $pos")
+        if (start == pos) fail("expected key at $pos")
         return src.substring(start, pos)
     }
 
@@ -194,14 +221,14 @@ internal class TomlParser(private val src: String) {
                     child
                 }
                 is TomlValue.Tbl -> next.entries
-                else -> error("key '$segment' is not a table at $pos")
+                else -> fail("key '$segment' is not a table at $pos")
             }
         }
         target[path.last()] = value
     }
 
     private fun parseValue(): TomlValue {
-        if (eof()) error("expected value at $pos")
+        if (eof()) fail("expected value at $pos")
         return when (peek()) {
             '"', '\'' -> TomlValue.Str(parseString())
             '[' -> parseArray()
@@ -223,7 +250,7 @@ internal class TomlParser(private val src: String) {
                 else -> out.append(c)
             }
         }
-        error("unterminated string at $pos")
+        fail("unterminated string at $pos")
     }
 
     private fun parseMultiline(quote: Char, escapes: Boolean): String {
@@ -239,11 +266,11 @@ internal class TomlParser(private val src: String) {
             val c = src[pos++]
             if (escapes && c == '\\') out.append(parseEscape()) else out.append(c)
         }
-        error("unterminated multiline string at $pos")
+        fail("unterminated multiline string at $pos")
     }
 
     private fun parseEscape(): String {
-        if (eof()) error("unterminated escape at $pos")
+        if (eof()) fail("unterminated escape at $pos")
         return when (val c = src[pos++]) {
             'n' -> "\n"
             't' -> "\t"
@@ -263,7 +290,7 @@ internal class TomlParser(private val src: String) {
                 pos += 8
                 String(Character.toChars(hex.toInt(16)))
             }
-            else -> error("unknown escape \\$c at $pos")
+            else -> fail("unknown escape \\$c at $pos")
         }
     }
 
@@ -272,21 +299,21 @@ internal class TomlParser(private val src: String) {
         val array = TomlValue.Arr()
         while (true) {
             skipBlank()
-            if (eof()) error("unterminated array at $pos")
+            if (eof()) fail("unterminated array at $pos")
             if (src[pos] == ']') {
                 pos++
                 return array
             }
             array.items.add(parseValue())
             skipBlank()
-            if (eof()) error("unterminated array at $pos")
+            if (eof()) fail("unterminated array at $pos")
             when (src[pos]) {
                 ',' -> pos++
                 ']' -> {
                     pos++
                     return array
                 }
-                else -> error("expected ',' or ']' at $pos")
+                else -> fail("expected ',' or ']' at $pos")
             }
         }
     }
@@ -296,7 +323,7 @@ internal class TomlParser(private val src: String) {
         val entries = LinkedHashMap<String, TomlValue>()
         while (true) {
             skipSpace()
-            if (eof()) error("unterminated inline table at $pos")
+            if (eof()) fail("unterminated inline table at $pos")
             if (src[pos] == '}') {
                 pos++
                 return TomlValue.Tbl(entries)
@@ -311,7 +338,7 @@ internal class TomlParser(private val src: String) {
                 pos++
                 return TomlValue.Tbl(entries)
             } else {
-                error("expected ',' or '}' at $pos")
+                fail("expected ',' or '}' at $pos")
             }
         }
     }
@@ -325,7 +352,7 @@ internal class TomlParser(private val src: String) {
             }
         }
         val raw = src.substring(start, pos)
-        if (raw.isEmpty()) error("expected value at $start")
+        if (raw.isEmpty()) fail("expected value at $start")
         return when {
             raw == "true" -> TomlValue.BoolVal(true)
             raw == "false" -> TomlValue.BoolVal(false)
@@ -339,7 +366,7 @@ internal class TomlParser(private val src: String) {
     }
 
     private fun expect(c: Char) {
-        if (eof() || src[pos] != c) error("expected '$c' at $pos")
+        if (eof() || src[pos] != c) fail("expected '$c' at $pos")
         pos++
     }
 

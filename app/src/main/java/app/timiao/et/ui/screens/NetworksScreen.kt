@@ -1,5 +1,7 @@
 package app.timiao.et.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -17,16 +19,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,8 +49,13 @@ import app.timiao.et.ui.components.OrbButton
 import app.timiao.et.ui.components.PillButton
 import app.timiao.et.ui.components.ScreenHeader
 import app.timiao.et.ui.components.glass
+import app.timiao.et.ui.data.PendingImport
 import app.timiao.et.ui.data.UiNetwork
+import app.timiao.et.ui.data.hasInstanceIdConflict
+import app.timiao.et.ui.data.readTomlUri
+import app.timiao.et.ui.data.resolveImportId
 import app.timiao.et.ui.theme.LocalGlassColors
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -56,7 +67,51 @@ fun NetworksScreen(
     val activeId by vm.activeNetworkId.collectAsStateWithLifecycle()
     val statuses by vm.statuses.collectAsStateWithLifecycle()
     val g = LocalGlassColors.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var deleteTarget by remember { mutableStateOf<UiNetwork?>(null) }
+    var pendingImport by remember { mutableStateOf<UiNetwork?>(null) }
+    var importFailure by remember { mutableStateOf<String?>(null) }
+
+    fun openImport(network: UiNetwork, saveAsNew: Boolean) {
+        val config = network.base ?: return
+        val existing = networks.map { it.id }.toSet()
+        val explicitId = config.instanceId
+        val id = resolveImportId(
+            importedId = explicitId,
+            existingIds = existing,
+            saveAsNew = saveAsNew || explicitId.isNullOrBlank(),
+        )
+        PendingImport.config = if (id == explicitId) config else config.copy(instanceId = id)
+        pendingImport = null
+        onNavigate(if (saveAsNew) "network/new?open=file" else "network/$id?open=file")
+    }
+
+    fun importText(text: String) {
+        scope.launch {
+            vm.importToml(text).onSuccess { imported ->
+                val existing = networks.map { it.id }.toSet()
+                if (hasInstanceIdConflict(imported.base?.instanceId, existing)) {
+                    pendingImport = imported
+                } else {
+                    openImport(imported, saveAsNew = false)
+                }
+            }.onFailure {
+                importFailure = it.message ?: "解析失败"
+            }
+        }
+    }
+
+    val openFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            scope.launch {
+                readTomlUri(context, uri)
+                    .onSuccess(::importText)
+                    .onFailure { importFailure = it.message ?: "读取文件失败" }
+            }
+        }
+    }
+
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -82,6 +137,18 @@ fun NetworksScreen(
                 style = MaterialTheme.typography.labelSmall,
                 color = g.muted,
                 modifier = Modifier.padding(horizontal = 6.dp),
+            )
+        }
+        item {
+            PillButton(
+                text = "从文件导入",
+                onClick = {
+                    openFile.launch(
+                        arrayOf("text/*", "application/toml", "application/octet-stream", "*/*"),
+                    )
+                },
+                secondary = true,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
 
@@ -141,6 +208,40 @@ fun NetworksScreen(
                 deleteTarget = null
             },
             onDismiss = { deleteTarget = null },
+        )
+    }
+
+    pendingImport?.let { imported ->
+        AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            title = { Text("已有同 ID 网络") },
+            text = {
+                Text(
+                    "本机已有 instance_id 为「${imported.base?.instanceId}」的网络。覆盖会替换该网络；" +
+                        "另存为新网络会生成新的 instance_id，避免与对方实例冲突。",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { openImport(imported, saveAsNew = true) }) {
+                    Text("另存为新网络")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { openImport(imported, saveAsNew = false) }) { Text("覆盖") }
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+        )
+    }
+
+    importFailure?.let { message ->
+        AlertDialog(
+            onDismissRequest = { importFailure = null },
+            title = { Text("导入失败") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = { importFailure = null }) { Text("关闭") }
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
         )
     }
 }
