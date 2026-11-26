@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application
+        android:name="app.timiao.et.debug.DebugApplication"
+        tools:replace="android:name">
         <!-- Debug-only diagnostics preview; not part of release builds. -->
         <activity
             android:name="app.timiao.et.debug.DiagnosticsDebugActivity"
@@ -18,6 +21,7 @@
                 <action android:name="app.timiao.et.DEBUG_SPLIT" />
                 <action android:name="app.timiao.et.DEBUG_LIST" />
                 <action android:name="app.timiao.et.DEBUG_PREPARE" />
+                <action android:name="app.timiao.et.DEBUG_DEMO" />
             </intent-filter>
         </receiver>
 

@@ -3,8 +3,11 @@ package app.timiao.et
 import android.app.Application
 import app.timiao.et.di.AppContainer
 
-class TimiaoApplication : Application() {
-    val container: AppContainer by lazy { AppContainer(this) }
+open class TimiaoApplication : Application() {
+    val container: AppContainer by lazy { createContainer() }
+
+    /** Overridden only by the debug source set (demo mode). Release uses AppContainer. */
+    protected open fun createContainer(): AppContainer = AppContainer(this)
 
     override fun onCreate() {
         super.onCreate()

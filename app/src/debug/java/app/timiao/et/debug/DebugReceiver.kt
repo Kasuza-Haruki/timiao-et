@@ -18,6 +18,17 @@ import kotlinx.coroutines.launch
 /** Debug-only test hook. Never logs config contents (they hold the network secret). */
 class DebugReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == "app.timiao.et.DEBUG_DEMO") {
+            val on = intent.getBooleanExtra("on", true)
+            val marker = java.io.File(context.filesDir, "demo_mode")
+            if (on) marker.writeText("1") else marker.delete()
+            Log.i(TAG, "demo mode=$on, restarting app")
+            // Rebuild the container: DebugApplication reads the marker on process start.
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                android.os.Process.killProcess(android.os.Process.myPid())
+            }, 300)
+            return
+        }
         val container = (context.applicationContext as TimiaoApplication).container
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {

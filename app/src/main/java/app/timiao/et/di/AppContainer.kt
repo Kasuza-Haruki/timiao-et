@@ -18,15 +18,15 @@ import app.timiao.et.traffic.TrafficStore
 import app.timiao.et.ui.screens.currentNetworkKind
 import kotlinx.coroutines.launch
 
-class AppContainer(context: Context) {
+open class AppContainer(context: Context) {
     private val app = context.applicationContext
-    val configRepository: ConfigRepository = FileConfigRepository(java.io.File(app.filesDir, "networks.enc"), AndroidKeystoreCipher())
+    open val configRepository: ConfigRepository = FileConfigRepository(java.io.File(app.filesDir, "networks.enc"), AndroidKeystoreCipher())
 
     /** Raw native engine. Only the VPN service calls start/stop on it. */
     val nativeEngine: JniEngine by lazy { JniEngine(configRepository, VpnTunProvider, strings = AndroidCoreStrings(app)) }
 
     /** What the UI uses: routes start/stop through the VPN service. */
-    val engine: Engine by lazy { ServiceEngine(app, nativeEngine) }
+    open val engine: Engine by lazy { ServiceEngine(app, nativeEngine) }
 
     val settingsStore: SettingsStore = SettingsStore(app)
 
@@ -35,7 +35,7 @@ class AppContainer(context: Context) {
     )
 
     /** Records traffic for as long as the process lives (the VPN foreground service keeps it alive). */
-    fun startTrafficRecording() {
+    open fun startTrafficRecording() {
         val cm = app.getSystemService(android.net.ConnectivityManager::class.java)
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
             var active = emptySet<String>()
