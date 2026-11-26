@@ -130,15 +130,15 @@ class TunMergeTest {
 
     @Test
     fun ipv4CidrsOverlapInsideTheSameSubnet() {
-        assertTrue(TunMerge.cidrOverlap("10.126.126.0/24", "10.126.126.7/24"))
-        assertTrue(TunMerge.cidrOverlap("10.126.126.5/24", "10.126.126.0/24"))
-        assertTrue(TunMerge.cidrOverlap("10.126.126.0/23", "10.126.127.0/24"))
-        assertTrue(TunMerge.cidrOverlap("0.0.0.0/0", "10.126.126.0/24"))
+        assertTrue(TunMerge.cidrOverlap("10.144.144.0/24", "10.144.144.7/24"))
+        assertTrue(TunMerge.cidrOverlap("10.144.144.5/24", "10.144.144.0/24"))
+        assertTrue(TunMerge.cidrOverlap("10.144.144.0/23", "10.144.145.0/24"))
+        assertTrue(TunMerge.cidrOverlap("0.0.0.0/0", "10.144.144.0/24"))
     }
 
     @Test
     fun ipv4CidrsDoNotOverlapAcrossSubnets() {
-        assertTrue(!TunMerge.cidrOverlap("10.126.126.0/24", "10.126.127.0/24"))
+        assertTrue(!TunMerge.cidrOverlap("10.144.144.0/24", "10.144.145.0/24"))
         assertTrue(!TunMerge.cidrOverlap("10.0.0.0/24", "11.0.0.0/24"))
         assertTrue(!TunMerge.cidrOverlap("10.0.0.0/25", "10.0.0.128/25"))
     }
@@ -153,10 +153,10 @@ class TunMergeTest {
 
     @Test
     fun differentFamiliesAndInvalidInputNeverOverlap() {
-        assertTrue(!TunMerge.cidrOverlap("10.126.126.0/24", "2001:db8::/32"))
-        assertTrue(!TunMerge.cidrOverlap("not-a-cidr", "10.126.126.0/24"))
-        assertTrue(!TunMerge.cidrOverlap("10.126.126.0/24", ""))
-        assertEquals("10.126.126.0/24", TunMerge.normalizedCidr("10.126.126.7/24"))
+        assertTrue(!TunMerge.cidrOverlap("10.144.144.0/24", "2001:db8::/32"))
+        assertTrue(!TunMerge.cidrOverlap("not-a-cidr", "10.144.144.0/24"))
+        assertTrue(!TunMerge.cidrOverlap("10.144.144.0/24", ""))
+        assertEquals("10.144.144.0/24", TunMerge.normalizedCidr("10.144.144.7/24"))
         assertEquals("2001:db8::/32", TunMerge.normalizedCidr("2001:db8::1/32"))
     }
 }

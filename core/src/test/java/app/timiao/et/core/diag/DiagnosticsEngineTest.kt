@@ -241,7 +241,7 @@ class DiagnosticsEngineTest {
     @Test
     fun `dhcp conflict event is fatal`() {
         val raw = rawInfos(
-            listOf("""{"event":{"DhcpIpv4Conflicted":[{"address":{"addr":176061956},"network_length":24}]}}"""),
+            listOf("""{"event":{"DhcpIpv4Conflicted":[{"address":{"addr":177246212},"network_length":24}]}}"""),
         )
         val result = report(raw = raw)
         val item = result.item("events")

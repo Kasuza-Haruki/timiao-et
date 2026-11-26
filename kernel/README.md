@@ -28,9 +28,9 @@ EASYTIER_PROXY= scripts/build-kernel.sh --tag v2.7.1 --abis arm64-v8a,armeabi-v7
 Both scripts:
 
 1. Reuse `kernel/src` when it is already a clone, otherwise shallow-clone the tag.
-   `EASYTIER_LOCAL_SRC` (defaults to an existing
-   `D:\extra\research\easytier-src` on Windows) is used as a local mirror to
-   speed up cloning.
+   Set `EASYTIER_LOCAL_SRC` to an existing local EasyTier checkout to speed up
+   cloning. Both scripts read this value from the environment only; they have
+   no built-in local path.
 2. Try every `kernel/patches/*.patch` in filename order with `git apply
    --check`. A patch is applied only when the check passes. Failures are
    recorded in `kernel/out/PATCH_STATUS.txt` (`<name>: APPLIED` or
@@ -43,12 +43,13 @@ Both scripts:
 
 Requirements: Rust 1.95 (from upstream `rust-toolchain.toml`), `cargo-ndk`,
 Android NDK r27+ (`ANDROID_NDK_HOME`). `CARGO_TARGET_DIR` is honored; set it to
-a large disk, for example `${ANDROID_ENV}\cargo-target`.
+a large disk, for example `<CARGO_TARGET_DIR>` (default:
+`kernel/src/target`).
 
 Windows-gnu hosts also need a real MinGW toolchain (gcc, as, dlltool) and
 libclang for `aws-lc-sys` and `kcp-sys`/bindgen. Rust's bundled windows-gnu gcc
-is linker-only. Set `EASYTIER_MINGW_BIN` to a MinGW `bin` directory; the script
-also auto-detects `${ANDROID_ENV}\mingw64\bin`. On a slow network, set
+is linker-only. Set `EASYTIER_MINGW_BIN` to a MinGW `bin` directory. The scripts
+have no built-in local toolchain path. On a slow network, set
 `EASYTIER_CRATES_MIRROR` to a sparse registry, for example
 `sparse+https://mirrors.ustc.edu.cn/crates.io-index/`. If the pinned Rust 1.95
 toolchain is unavailable, set `RUSTUP_TOOLCHAIN=stable` (must be >= 1.95).

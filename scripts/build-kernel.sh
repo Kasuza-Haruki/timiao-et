@@ -6,7 +6,7 @@
 #                           [--no-jni-libs]
 #
 # Environment:
-#   EASYTIER_PROXY       optional git HTTP(S) proxy, e.g. http://127.0.0.1:PORT
+#   EASYTIER_PROXY       optional git HTTP(S) proxy, e.g. http://<proxy-host>:<port>
 #   EASYTIER_LOCAL_SRC   optional local EasyTier clone used to speed up cloning
 #   CARGO_TARGET_DIR     optional cargo target dir (default: kernel/src/target)
 #   ANDROID_NDK_HOME     Android NDK (r27+ recommended)
@@ -35,9 +35,6 @@ PATCH_DIR="$ROOT/kernel/patches"
 
 PROXY="${EASYTIER_PROXY:-}"
 MIRROR="${EASYTIER_LOCAL_SRC:-}"
-if [[ -z "$MIRROR" && -d "/d/extra/research/easytier-src/.git" ]]; then
-  MIRROR="/d/extra/research/easytier-src"
-fi
 if [[ -n "$PROXY" ]]; then
   export HTTP_PROXY="$PROXY" HTTPS_PROXY="$PROXY" http_proxy="$PROXY" https_proxy="$PROXY"
 fi
@@ -136,9 +133,6 @@ export ANDROID_NDK_HOME="$NDK"
 # MSYS/Git Bash host: Rust's windows-gnu toolchain lacks a C compiler and as.
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*)
-    if [[ -z "${EASYTIER_MINGW_BIN:-}" && -x /d/envs/mingw64/bin/gcc.exe ]]; then
-      EASYTIER_MINGW_BIN=/d/envs/mingw64/bin
-    fi
     if [[ -n "${EASYTIER_MINGW_BIN:-}" && -x "$EASYTIER_MINGW_BIN/gcc.exe" ]]; then
       export PATH="$EASYTIER_MINGW_BIN:$PATH"
       [[ -f "$EASYTIER_MINGW_BIN/libclang.dll" ]] && export LIBCLANG_PATH="$EASYTIER_MINGW_BIN"

@@ -570,7 +570,7 @@
     <string name="edit_cannot_write_file">Cannot write the file</string>
     <string name="edit_saved_file">Saved %1$s</string>
     <string name="edit_save_failed">Save failed: %1$s</string>
-    <string name="edit_err_ipv4_format">Expected format: 10.126.126.5/24</string>
+    <string name="edit_err_ipv4_format">Expected format: 10.144.144.5/24</string>
     <string name="edit_err_ipv6_format">Expected format: fd00::5/64</string>
     <string name="edit_err_mtu_range">MTU must be 400-1380</string>
     <string name="edit_err_integer_bps">Enter an integer (bytes/s)</string>

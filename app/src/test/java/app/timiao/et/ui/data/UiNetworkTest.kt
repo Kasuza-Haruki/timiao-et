@@ -13,11 +13,11 @@ class UiNetworkTest {
 
     private val importedToml = """
         instance_name = "phone"
-        instance_id = "00000000-0000-4000-8000-000000000009"
+        instance_id = "46d1ef5a-789f-584b-a849-e40e47de01ad"
         hostname = "pixel"
         dhcp = true
         socks5_proxy = "socks5://0.0.0.0:1080"
-        exit_nodes = ["10.126.126.1"]
+        exit_nodes = ["10.144.144.1"]
         mapped_listeners = ["tcp://203.0.113.5:11223"]
 
         [network_identity]
@@ -49,12 +49,12 @@ class UiNetworkTest {
         assertEquals("pixel", again.hostname)
         assertEquals(1420, again.flags.mtu)
         assertEquals("socks5://0.0.0.0:1080", again.socks5Proxy)
-        assertEquals(listOf("10.126.126.1"), again.exitNodes)
+        assertEquals(listOf("10.144.144.1"), again.exitNodes)
         assertEquals(listOf("tcp://203.0.113.5:11223"), again.mappedListeners)
         assertEquals("dW5pdC10ZXN0LXByaXZhdGUta2V5LTMyLWJ5dGVzISE=", again.secureMode?.localPrivateKey)
         assertEquals("cred-1", again.managedCredentials.single().credentialId)
         assertEquals("phone", again.instanceName)
-        assertEquals("00000000-0000-4000-8000-000000000009", again.instanceId)
+        assertEquals("46d1ef5a-789f-584b-a849-e40e47de01ad", again.instanceId)
         assertTrue(again.flags.disableRelayData)
     }
 
@@ -110,11 +110,11 @@ class UiNetworkTest {
 
     @Test
     fun portForwardDraftRoundTripsAndValidates() {
-        val draft = PortForwardDraft("udp", "0.0.0.0", "12345", "10.126.126.1", "23456")
+        val draft = PortForwardDraft("udp", "0.0.0.0", "12345", "10.144.144.1", "23456")
         assertNull(draft.error())
         val config = draft.toPortForward()
         assertEquals("0.0.0.0:12345", config.bindAddr)
-        assertEquals("10.126.126.1:23456", config.dstAddr)
+        assertEquals("10.144.144.1:23456", config.dstAddr)
         assertEquals(draft, config.toDraft())
 
         assertEquals(R.string.edit_err_port_range, draft.copy(bindPort = "70000").error())
@@ -171,8 +171,8 @@ class UiNetworkTest {
         assertTrue(isValidHostPort("[::]:22022"))
         assertFalse(isValidHostPort("0.0.0.0"))
         assertFalse(isValidHostPort("0.0.0.0:70000"))
-        assertTrue(isValidCidr("10.126.126.0/24"))
-        assertFalse(isValidCidr("10.126.126.0/33"))
+        assertTrue(isValidCidr("10.144.144.0/24"))
+        assertFalse(isValidCidr("10.144.144.0/33"))
     }
 
     @Test
@@ -213,17 +213,17 @@ class UiNetworkTest {
             masterPrivateKeyBase64 = master,
             listen = "0.0.0.0:22022",
             clientName = "alice",
-            virtualIpCidr = "10.126.126.10/24",
+            virtualIpCidr = "10.144.144.10/24",
             proxyCidrs = listOf("192.168.1.0/24"),
         )
         assertNotNull(config)
         assertTrue(config!!.contains("[Interface]"))
         assertTrue(config.contains("PrivateKey = "))
-        assertTrue(config.contains("Address = 10.126.126.10/32"))
+        assertTrue(config.contains("Address = 10.144.144.10/32"))
         assertTrue(config.contains("[Peer]"))
         assertTrue(config.contains("AllowedIPs = "))
         assertTrue(config.contains("192.168.1.0/24"))
-        assertTrue(config.contains("10.126.126.0/24"))
+        assertTrue(config.contains("10.144.144.0/24"))
         assertTrue(config.contains("Endpoint = 0.0.0.0:22022"))
         assertTrue(config.contains("PersistentKeepalive = 25"))
     }

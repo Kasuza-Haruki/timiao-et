@@ -585,13 +585,13 @@ class JniEngineTest {
         val a = sampleNetworkConfig().copy(
             instanceName = "a",
             dhcp = false,
-            ipv4 = "10.126.126.1/24",
+            ipv4 = "10.144.144.1/24",
         )
         val b = sampleNetworkConfig().copy(
             instanceName = "b",
             networkName = "second",
             dhcp = false,
-            ipv4 = "10.126.126.9/24",
+            ipv4 = "10.144.144.9/24",
         )
 
         try {
@@ -603,7 +603,7 @@ class JniEngineTest {
                 message = e.message
             }
 
-            assertTrue(message!!.contains("与正在运行的「${a.networkName}」网段重叠（10.126.126.0/24）"))
+            assertTrue(message!!.contains("与正在运行的「${a.networkName}」网段重叠（10.144.144.0/24）"))
             assertTrue(message.contains("请先断开它或修改网段"))
             assertEquals(LinkState.Error, engine.status.value.getValue("b").state)
             assertEquals(message, engine.status.value.getValue("b").error)
@@ -621,11 +621,11 @@ class JniEngineTest {
         val bJson = """
             {
               "a": {
-                "my_node_info": {"virtual_ipv4": {"address": {"addr": 176061953}, "network_length": 24}},
+                "my_node_info": {"virtual_ipv4": {"address": {"addr": 177246209}, "network_length": 24}},
                 "running": true
               },
               "b": {
-                "my_node_info": {"virtual_ipv4": {"address": {"addr": 176061961}, "network_length": 24}},
+                "my_node_info": {"virtual_ipv4": {"address": {"addr": 177246217}, "network_length": 24}},
                 "running": true
               }
             }
@@ -644,7 +644,7 @@ class JniEngineTest {
         val a = sampleNetworkConfig().copy(
             instanceName = "a",
             dhcp = false,
-            ipv4 = "10.126.126.1/24",
+            ipv4 = "10.144.144.1/24",
         )
         val b = sampleNetworkConfig().copy(
             instanceName = "b",
@@ -662,7 +662,7 @@ class JniEngineTest {
                 message = e.message
             }
 
-            assertTrue(message!!.contains("与正在运行的「${a.networkName}」网段重叠（10.126.126.0/24）"))
+            assertTrue(message!!.contains("与正在运行的「${a.networkName}」网段重叠（10.144.144.0/24）"))
             assertEquals(LinkState.Error, engine.status.value.getValue("b").state)
             assertTrue(bridge.calls.contains("deleteNetworkInstance:b"))
             assertTrue(bridge.calls.none { it.startsWith("setTunFd:b") })
@@ -677,11 +677,11 @@ class JniEngineTest {
         val bJson = """
             {
               "a": {
-                "my_node_info": {"virtual_ipv4": {"address": {"addr": 176061953}, "network_length": 24}},
+                "my_node_info": {"virtual_ipv4": {"address": {"addr": 177246209}, "network_length": 24}},
                 "running": true
               },
               "b": {
-                "my_node_info": {"virtual_ipv4": {"address": {"addr": 176061961}, "network_length": 24}},
+                "my_node_info": {"virtual_ipv4": {"address": {"addr": 177246217}, "network_length": 24}},
                 "running": true
               }
             }
@@ -700,7 +700,7 @@ class JniEngineTest {
         val a = sampleNetworkConfig().copy(
             instanceName = "a",
             dhcp = false,
-            ipv4 = "10.126.126.1/24",
+            ipv4 = "10.144.144.1/24",
         )
         val b = sampleNetworkConfig().copy(
             instanceName = "b",
@@ -718,11 +718,11 @@ class JniEngineTest {
                 engine.status.first { it["b"]?.state == LinkState.Error }
             }
             val status = failed.getValue("b")
-            assertTrue(status.error!!.contains("与正在运行的「${a.networkName}」网段重叠（10.126.126.0/24）"))
+            assertTrue(status.error!!.contains("与正在运行的「${a.networkName}」网段重叠（10.144.144.0/24）"))
             assertTrue(bridge.calls.contains("deleteNetworkInstance:b"))
             // The first network keeps running.
             assertTrue(engine.status.value.getValue("a").state != LinkState.Error)
-            assertTrue(tun.merged.last().addresses.any { it.address == "10.126.126.1" })
+            assertTrue(tun.merged.last().addresses.any { it.address == "10.144.144.1" })
         } finally {
             engine.close()
             scope.cancel()

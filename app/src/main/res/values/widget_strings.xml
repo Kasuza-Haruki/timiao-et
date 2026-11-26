@@ -12,7 +12,7 @@
     <string name="widget_switch_desc_disconnect">断开连接</string>
     <string name="widget_preview_name">home-mesh</string>
     <string name="widget_preview_status">已连接 · 3 节点</string>
-    <string name="widget_preview_ip">10.126.126.5</string>
+    <string name="widget_preview_ip">10.144.144.5</string>
 
     <!-- Glass card, light. -->
     <color name="widget_bg_start">#D9FFFFFF</color>

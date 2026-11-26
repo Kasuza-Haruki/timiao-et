@@ -570,7 +570,7 @@
     <string name="edit_cannot_write_file">无法写入文件</string>
     <string name="edit_saved_file">已保存 %1$s</string>
     <string name="edit_save_failed">保存失败：%1$s</string>
-    <string name="edit_err_ipv4_format">格式应为 10.126.126.5/24</string>
+    <string name="edit_err_ipv4_format">格式应为 10.144.144.5/24</string>
     <string name="edit_err_ipv6_format">格式应为 fd00::5/64</string>
     <string name="edit_err_mtu_range">MTU 范围 400-1380</string>
     <string name="edit_err_integer_bps">请输入整数（字节/秒）</string>
