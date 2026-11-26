@@ -41,6 +41,7 @@ import app.timiao.et.ui.components.SegmentedGlass
 import app.timiao.et.ui.components.glass
 import app.timiao.et.ui.data.AppLanguage
 import app.timiao.et.ui.data.ThemeMode
+import app.timiao.et.ui.navigation.Routes
 import app.timiao.et.ui.theme.LocalGlassColors
 import app.timiao.et.ui.theme.LocalReducedMotion
 
@@ -142,6 +143,12 @@ fun SettingsScreen(vm: AppViewModel, onOpen: (String) -> Unit = {}) {
                 InfoRow(stringResource(R.string.settings_package), BuildConfig.APPLICATION_ID)
                 InfoRow(stringResource(R.string.settings_animation), stringResource(if (reduced) R.string.settings_animation_reduced else R.string.settings_animation_system))
             }
+        }
+        item {
+            NavRow(
+                stringResource(R.string.settings_licenses),
+                stringResource(R.string.settings_licenses_sub),
+            ) { onOpen(Routes.LICENSES) }
         }
         item {
             Text(
