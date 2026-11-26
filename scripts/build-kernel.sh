@@ -147,7 +147,8 @@ esac
 
 READELF="$(find "$NDK/toolchains/llvm/prebuilt" -path '*/bin/llvm-readelf' -type f 2>/dev/null | head -1 || true)"
 
-PINNED_FLAGS="-C link-arg=-Wl,-z,max-page-size=16384"
+# remap-path-prefix keeps the builder's home and cargo paths out of panic/debug strings.
+PINNED_FLAGS="-C link-arg=-Wl,-z,max-page-size=16384 --remap-path-prefix=$HOME=/build --remap-path-prefix=$SRC=/src"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$SRC/target}"
 mkdir -p "$CARGO_TARGET_DIR" "$OUT_ROOT"
 

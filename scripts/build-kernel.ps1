@@ -181,7 +181,8 @@ if (-not $Readelf) {
         Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 
-$PinnedFlags = "-C link-arg=-Wl,-z,max-page-size=16384"
+# remap-path-prefix keeps the builder's home and cargo paths out of panic/debug strings.
+$PinnedFlags = "-C link-arg=-Wl,-z,max-page-size=16384 --remap-path-prefix=$env:USERPROFILE=/build --remap-path-prefix=$Src=/src"
 $env:CARGO_TARGET_DIR = $TargetDir
 New-Item -ItemType Directory -Force $TargetDir | Out-Null
 New-Item -ItemType Directory -Force $OutRoot | Out-Null
