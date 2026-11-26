@@ -9,9 +9,9 @@ import org.junit.Test
 class TomlRoundTripTest {
 
     private val phoneToml = """
-        hostname = "Phone"
+        hostname = "phone-a"
         instance_name = "Home-Lab"
-        instance_id = "00000000-0000-4000-8000-000000000001"
+        instance_id = "91c76673-b539-5e99-8e7b-5dd20fcec66f"
         dhcp = true
 
         [network_identity]
@@ -31,7 +31,7 @@ class TomlRoundTripTest {
 
     private val fullToml = """
         instance_name = "phone"
-        instance_id = "00000000-0000-4000-8000-000000000002"
+        instance_id = "88c19b5a-b480-52b0-89f1-fe8b490b0c24"
         hostname = "pixel"
         ipv4 = "10.144.144.10/24"
         listeners = ["tcp://0.0.0.0:11010", "udp://0.0.0.0:11010"]
@@ -116,12 +116,12 @@ class TomlRoundTripTest {
     """.trimIndent()
 
     @Test
-    fun importsPhoneConfig() {
+    fun importsSampleConfig() {
         val config = TomlCodec.importToml(phoneToml)
 
         assertEquals("Home-Lab", config.instanceName)
-        assertEquals("00000000-0000-4000-8000-000000000001", config.instanceId)
-        assertEquals("Phone", config.hostname)
+        assertEquals("91c76673-b539-5e99-8e7b-5dd20fcec66f", config.instanceId)
+        assertEquals("phone-a", config.hostname)
         assertEquals("Home-Lab", config.networkName)
         assertEquals("unit-test-secret-do-not-use", config.networkSecret)
         assertTrue(config.dhcp)

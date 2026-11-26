@@ -41,9 +41,9 @@ class TomlFileTest {
 
     @Test
     fun detectsCopiedInstanceId() {
-        val existing = setOf("00000000-0000-4000-8000-000000000001", "home")
+        val existing = setOf("91c76673-b539-5e99-8e7b-5dd20fcec66f", "home")
 
-        assertTrue(hasInstanceIdConflict("00000000-0000-4000-8000-000000000001", existing))
+        assertTrue(hasInstanceIdConflict("91c76673-b539-5e99-8e7b-5dd20fcec66f", existing))
         assertFalse(hasInstanceIdConflict("fresh-id", existing))
         assertFalse(hasInstanceIdConflict(null, existing))
         assertFalse(hasInstanceIdConflict("", existing))

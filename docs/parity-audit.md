@@ -3,8 +3,8 @@
 审计方式：只读源码对照，不改代码，不做运行期测试。  
 路径缩写：
 
-- `O` = `D:\extra\research\easytier-src`
-- `T` = `D:\extra\timiao-et`
+- `O` = 本机或 CI 自备的 EasyTier 上游源码 checkout
+- `T` = 本仓库根目录
 
 标记定义：
 
@@ -139,7 +139,7 @@
 | 行编辑：`proto` 选择 tcp/udp，`bind_ip`、`bind_port`、`dst_ip`、`dst_port` | 一行文本：`tcp://bind -> dst`；保存时正则解析 | ②⚠ | 官方 `Config.vue:574-659`、`network.ts:584-597`；缇喵 `UiNetwork.kt:74,103-106`、`NetworkEditScreen.kt:272-284` |
 | TOML 写 `bind_addr`/`dst_addr`/`proto` | TOML 写同样三个字段，proto 为 `tcp`/`udp` | 一致 | 官方 `api_input.rs:364-385`；缇喵 `TomlCodec.kt:184-196` |
 
-风险：官方帮助示例是 `udp://0.0.0.0:12345/10.126.126.1:23456`（`O/easytier-web/frontend-lib/src/locales/cn.yaml:281-283`）。缇喵只接受 `->` 格式。用户粘贴官方格式时，`parseForward` 返回 null，保存时该行被静默丢弃（`UiNetwork.kt:95,103-106`）。
+风险：官方帮助示例是 `udp://0.0.0.0:12345/10.144.144.1:23456`（`O/easytier-web/frontend-lib/src/locales/cn.yaml:281-283`）。缇喵只接受 `->` 格式。用户粘贴官方格式时，`parseForward` 返回 null，保存时该行被静默丢弃（`UiNetwork.kt:95,103-106`）。
 
 ### 1.5 ACL
 
@@ -261,7 +261,7 @@
 | M4 | 无自愈：轮询失败只显示 Error；服务非 sticky。 | 加核心重启/重连退避；服务改 `START_STICKY` 并处理无 Intent 重启。 | 官方 `mobile_vpn.ts:133-160,443-468`、`TauriVpnService.kt:41-65`；缇喵 `JniEngine.kt:153-177`、`TimiaoVpnService.kt:78` |
 | M5 | `no_tun` 无效：仍建立 TUN。 | 启动前检查 `flags.noTun`；为 true 时跳过 `establishTun`/`setTunFd`，并保留前台服务。 | 官方 `runtime_host.rs:150-152`、`mobile_vpn.ts:503-523`；缇喵 `UiNetwork.kt:139`、`JniEngine.kt:71-74` |
 | M6 | DHCP 与静态地址选择错误：DHCP 为真仍优先用残留 `ipv4`；静态为空时等 15 秒后失败。core 在 DHCP 下会忽略 `ipv4`，TUN 却用了它。 | `resolveAddress` 先看 `dhcp`：为真只等 DHCP；为假才用 `ipv4`，为空立即报配置错误。 | `JniEngine.kt:142-150`；官方 `mobile_vpn.ts:383-393`、`instance/config.rs:235-237` |
-| M7 | 多网络没有共享 TUN：每次 start 新建 TUN；上一个 fd 已 detach，`close()` 不可靠；无地址/路由并集、无冲突拒绝。 | 保留一个 TUN fd，挂多个实例；地址/路由并集；冲突实例拒绝并提示。官方 JNI 已支持。 | 官方 `mobile_tun.rs:57-131,221-251`；缇喵 `TimiaoVpnService.kt:82-99`；`docs/ARCHITECTURE.md:62` 仍列为 Phase 2 |
+| M7 | 多网络没有共享 TUN：每次 start 新建 TUN；上一个 fd 已 detach，`close()` 不可靠；无地址/路由并集、无冲突拒绝。 | 保留一个 TUN fd，挂多个实例；地址/路由并集；冲突实例拒绝并提示。官方 JNI 已支持。 | 官方 `mobile_tun.rs:57-131,221-251`；缇喵 `TimiaoVpnService.kt:82-99`；`docs/ARCHITECTURE.md` 的 Roadmap 仍列为 Phase 2 |
 | M8 | 路由只取启动时静态配置，缺 peer 代理网段和动态 proxy CIDR。 | 从状态/运行时读取 proxy CIDR，加入 TUN 路由并随 reconcile 更新。 | 官方 `virtual_nic.rs:1620-1654`、`cidr_monitor.rs:99-130`；缇喵 `JniEngine.kt:72` |
 | M9 | 导入 TOML 后保存丢字段：hostname、secure_mode、managed_credentials、dhcpv6、routes、exit_nodes、socks5、portal clients、未显示 flags 等在 `toUi()` 被丢弃；新网络回落默认，已有网络保留旧值。 | 保存时保留导入的完整 `NetworkConfig` 作为 base；或界面编辑只改差异字段。 | `AppViewModel.kt:110-112`、`UiNetwork.kt:65-101`、`NetworkEditScreen.kt:429` |
 | M10 | 高级配置界面缺口大：hostname、mtu、instance limit、socks5、manual routes、exit nodes、mapped listeners、15 个 flags + `ipv6_public_addr_auto`。 | 按官方 `Config.vue` 补齐；flags 用 schema 默认值渲染，避免“未设置=关闭”。 | 官方 `Config.vue:376-567`、`network.ts:154-183`；缇喵 `UiNetwork.kt:121-143` |

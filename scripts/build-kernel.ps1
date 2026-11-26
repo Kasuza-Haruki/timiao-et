@@ -15,8 +15,10 @@
 param(
     [string]$Tag = "v2.7.1",
     [string]$Abis = "arm64-v8a,x86_64",
-    [string]$Proxy = $(if ($env:EASYTIER_PROXY) { $env:EASYTIER_PROXY } elseif (Test-Path "D:\extra\research\easytier-src\.git") { "http://127.0.0.1:PORT" } else { "" }),
-    [string]$LocalMirror = $(if ($env:EASYTIER_LOCAL_SRC) { $env:EASYTIER_LOCAL_SRC } elseif (Test-Path "D:\extra\research\easytier-src\.git") { "D:\extra\research\easytier-src" } else { "" }),
+    # Defaults come from the environment only. Set EASYTIER_PROXY to use a
+    # git HTTP(S) proxy; set EASYTIER_LOCAL_SRC to reuse an existing clone.
+    [string]$Proxy = $env:EASYTIER_PROXY,
+    [string]$LocalMirror = $env:EASYTIER_LOCAL_SRC,
     [string]$TargetDir = $(if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { "" }),
     [switch]$NoJniLibs
 )
@@ -193,9 +195,6 @@ try {
     Pop-Location
     if ($hostTriple -match "windows-gnu") {
         $mingwBin = $env:EASYTIER_MINGW_BIN
-        if (-not $mingwBin -and (Test-Path "${ANDROID_ENV}\mingw64\bin\gcc.exe")) {
-            $mingwBin = "${ANDROID_ENV}\mingw64\bin"
-        }
         if ($mingwBin -and (Test-Path (Join-Path $mingwBin "gcc.exe"))) {
             $mingwRoot = Split-Path $mingwBin -Parent
             $env:PATH = "$mingwBin;$env:PATH"

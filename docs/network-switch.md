@@ -1,8 +1,8 @@
-# 网络切换保活建议（供主 Agent 决策，未接入）
+# 网络切换保活建议（设计建议，未接入）
 
 本文只给建议。`TimiaoVpnService.kt` 未改动。
 
-## 内核现状（依据 D:\extra\research\easytier-src）
+## 内核现状（依据 EasyTier 上游源码）
 
 1. 内核没有平台网络变化监听器：全仓库 grep `network_change` / `NetworkChange` / `ConnectivityManager` / `setUnderlyingNetworks`，没有 Android 侧实现。
 2. 断线靠重连循环兜底：

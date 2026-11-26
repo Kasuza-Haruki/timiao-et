@@ -66,23 +66,23 @@ class StatusParserTest {
                   "peer_id": 2,
                   "conns": [
                     {
-                      "conn_id": "e7508c58-c194-416d-937f-23f7871c0df2",
+                      "conn_id": "90bc788f-f648-539e-959b-95150825bd61",
                       "tunnel": {"tunnel_type": "tcp", "local_addr": {"url": "tcp://10.0.2.15:33236"}, "remote_addr": {"url": "tcp://203.0.113.9:11010"}},
                       "stats": {"rx_bytes": "2048", "tx_bytes": "1024", "latency_us": "8000"},
                       "loss_rate": 0.01
                     },
                     {
-                      "conn_id": "cb506d1c-ff71-476e-8e29-15de9b092224",
+                      "conn_id": "65afb122-58ec-51b0-b092-1556a50260d9",
                       "tunnel": {"tunnel_type": "udp", "local_addr": {"url": "udp://[::]:46455"}, "remote_addr": {"url": "udp://203.0.113.9:11010"}},
                       "stats": {"rx_bytes": "4096", "tx_bytes": "8192", "latency_us": "50000"},
                       "loss_rate": 0.3
                     }
                   ],
                   "default_conn_id": {
-                    "part1": 3411045660,
-                    "part2": 4285613934,
-                    "part3": 2385057246,
-                    "part4": 2601067044
+                    "part1": 1706012962,
+                    "part2": 1491882416,
+                    "part3": 2962363734,
+                    "part4": 2768396505
                   }
                 }
               },
@@ -371,13 +371,13 @@ class StatusParserTest {
     }
 }
 
-class StatusParserRealPayloadTest {
+class StatusParserSamplePayloadTest {
     private val text = javaClass.getResource("/sample_infos.json")!!.readText()
 
     @org.junit.Test
-    fun parsesMapWrappedPayloadFromRealKernel() {
+    fun parsesMapWrappedSamplePayload() {
         val ip = StatusParser.primaryIpv4(text, "Home-Lab")
-        org.junit.Assert.assertEquals("10.126.126.4/24", ip)
+        org.junit.Assert.assertEquals("10.144.144.4/24", ip)
         val st = StatusParser.parse(text, "Home-Lab", 5)!!
         org.junit.Assert.assertEquals(LinkState.Connected, st.state)
         org.junit.Assert.assertTrue(st.peers.isNotEmpty())
@@ -396,7 +396,7 @@ class StatusParserRealPayloadTest {
         // Connection stats beat route path_latency (500 ms).
         org.junit.Assert.assertEquals(2.0, desktop.latencyMs!!, 0.001)
 
-        val phone = st.peers.first { it.hostname == "Phone" }
+        val phone = st.peers.first { it.hostname == "phone-a" }
         org.junit.Assert.assertEquals("relay(2)", phone.cost)
         // No peer entry: falls back to route path_latency.
         org.junit.Assert.assertEquals(131.0, phone.latencyMs!!, 0.001)
@@ -404,14 +404,14 @@ class StatusParserRealPayloadTest {
         org.junit.Assert.assertEquals(touma.peerId, phone.nextHopPeerId)
 
         val node = st.node!!
-        org.junit.Assert.assertEquals("471554288", node.peerId)
+        org.junit.Assert.assertEquals("334686501", node.peerId)
         org.junit.Assert.assertEquals("emu-a", node.hostname)
-        org.junit.Assert.assertEquals("10.126.126.4/24", node.virtualIpv4)
+        org.junit.Assert.assertEquals("10.144.144.4/24", node.virtualIpv4)
         org.junit.Assert.assertEquals("Symmetric", node.udpNatType)
         org.junit.Assert.assertEquals("Symmetric", node.tcpNatType)
         org.junit.Assert.assertEquals(12228, node.stunMinPort)
         org.junit.Assert.assertEquals(47163, node.stunMaxPort)
-        org.junit.Assert.assertEquals(listOf("ring://2ba27110-f35f-493e-bd0b-28f7504cbb63"), node.listeners)
+        org.junit.Assert.assertEquals(listOf("ring://c7bb782e-d8a7-5050-b04e-2166399ee3af"), node.listeners)
         org.junit.Assert.assertTrue(node.localIpv4s.isNotEmpty())
         org.junit.Assert.assertTrue(node.localIpv6s.isNotEmpty())
         org.junit.Assert.assertNotNull(node.publicIpv4)
@@ -431,7 +431,7 @@ class StatusParserRealPayloadTest {
         // Newest first.
         org.junit.Assert.assertEquals("PeerConnAdded", st.events.first().type)
         org.junit.Assert.assertEquals(NetworkEventKind.Connect, st.events.first().kind)
-        org.junit.Assert.assertTrue(st.events.first().detail.contains("对端 2651160302"))
+        org.junit.Assert.assertTrue(st.events.first().detail.contains("对端 366135733"))
         org.junit.Assert.assertTrue(st.events.any { it.type == "DhcpIpv4Changed" })
         org.junit.Assert.assertTrue(st.events.any { it.type == "ListenerAdded" })
         org.junit.Assert.assertEquals(0, st.events.count { it.kind == NetworkEventKind.Error })

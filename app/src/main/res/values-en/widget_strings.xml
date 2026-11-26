@@ -11,5 +11,5 @@
     <string name="widget_switch_desc_disconnect">Disconnect</string>
     <string name="widget_preview_name">home-mesh</string>
     <string name="widget_preview_status">Connected · 3 nodes</string>
-    <string name="widget_preview_ip">10.126.126.5</string>
+    <string name="widget_preview_ip">10.144.144.5</string>
 </resources>

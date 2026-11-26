@@ -634,7 +634,7 @@ fun NetworkEditScreen(
                         label = stringResource(R.string.edit_static_ipv4),
                         value = form!!.ipv4,
                         onChange = { form = form!!.copy(ipv4 = it) },
-                        placeholder = "10.126.126.5/24",
+                        placeholder = "10.144.144.5/24",
                         mono = true,
                         error = ipv4Error,
                         keyboardType = KeyboardType.Uri,
@@ -805,7 +805,7 @@ fun NetworkEditScreen(
                         label = stringResource(R.string.edit_exit_nodes),
                         value = texts.exitNodes,
                         onChange = { texts = texts.copy(exitNodes = it) },
-                        placeholder = "10.126.126.1",
+                        placeholder = "10.144.144.1",
                         singleLine = false,
                         minLines = 1,
                         maxLines = 3,
@@ -1052,7 +1052,7 @@ fun NetworkEditScreen(
                                         },
                                     )
                                 },
-                                placeholder = "10.126.126.1",
+                                placeholder = "10.144.144.1",
                                 mono = true,
                                 keyboardType = KeyboardType.Uri,
                                 focus = focus,
@@ -1237,7 +1237,7 @@ fun NetworkEditScreen(
                                         ),
                                     )
                                 },
-                                placeholder = "10.126.126.10/24",
+                                placeholder = "10.144.144.10/24",
                                 mono = true,
                                 error = if (!isValidCidr(client.virtualIp)) stringResource(R.string.edit_invalid_cidr_input) else null,
                                 keyboardType = KeyboardType.Uri,
@@ -1292,7 +1292,7 @@ fun NetworkEditScreen(
                                     vpnPortal = portal.copy(
                                         clients = portal.clients + VpnPortalClient(
                                             name = "device-${portal.clients.size + 1}",
-                                            virtualIp = "10.126.126.${10 + portal.clients.size}/24",
+                                            virtualIp = "10.144.144.${10 + portal.clients.size}/24",
                                         ),
                                     ),
                                 )
