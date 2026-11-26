@@ -104,3 +104,31 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.compose.ui.test.junit4)
 }
+
+// Fail closed for release builds: the kernel patches redact network secrets from
+// native logs. If the kernel build recorded a failed patch, refuse to assemble a
+// release APK. Debug builds are not blocked, and a missing status file (for
+// example, a developer using a prebuilt .so) is allowed.
+val checkKernelPatches = tasks.register("checkKernelPatches") {
+    val statusFile = rootProject.layout.projectDirectory.file("kernel/out/PATCH_STATUS.txt")
+    doLast {
+        val file = statusFile.asFile
+        if (file.isFile) {
+            val failed = file.readLines().filter { line ->
+                line.substringAfter(':', "").trim() == "FAILED"
+            }
+            if (failed.isNotEmpty()) {
+                throw GradleException(
+                    "Kernel patches failed to apply: ${failed.joinToString()}. " +
+                        "See kernel/out/PATCH_STATUS.txt and kernel/patches/. " +
+                        "Release builds require every patch to be APPLIED because " +
+                        "they redact network secrets from native logs.",
+                )
+            }
+        }
+    }
+}
+
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(checkKernelPatches)
+}

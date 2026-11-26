@@ -41,6 +41,7 @@ import app.timiao.et.ui.screens.AppSplitScreen
 import app.timiao.et.ui.screens.AutoRulesScreen
 import app.timiao.et.ui.screens.DiagnosticsScreen
 import app.timiao.et.ui.screens.EventLogScreen
+import app.timiao.et.ui.screens.LicensesScreen
 import app.timiao.et.ui.screens.ShareScreen
 import app.timiao.et.ui.screens.SplitRoutes
 import app.timiao.et.ui.screens.TrafficScreen
@@ -61,6 +62,7 @@ object Routes {
     const val DIAGNOSTICS = "diagnostics"
     const val TRAFFIC = "traffic"
     const val SCAN = "scan"
+    const val LICENSES = "licenses"
     const val SHARE_PATTERN = "share/{id}"
     fun share(id: String) = "share/$id"
     const val EDIT_PATTERN = "network/{id}?open={open}"
@@ -148,6 +150,7 @@ fun TimiaoRoot(vm: AppViewModel) {
                 )
             }
             composable(Routes.TRAFFIC) { TrafficScreen(vm, recorder = vm.trafficRecorder) }
+            composable(Routes.LICENSES) { LicensesScreen(onBack = { nav.popBackStack() }) }
             composable(AUTO_RULES_ROUTE) { AutoRulesScreen(vm) { nav.popBackStack() } }
             composable(SplitRoutes.PATTERN, listOf(navArgument("networkId") { type = NavType.StringType })) {
                 AppSplitScreen(SplitStoreGlobalId) { nav.popBackStack() }

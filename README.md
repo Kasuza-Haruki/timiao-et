@@ -14,6 +14,8 @@
 ![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?logo=kotlin&logoColor=white)
 ![中文 / English](https://img.shields.io/badge/i18n-中文%20%7C%20English-8A6448)
 
+[English summary below ↓](#english)
+
 <img src="docs/screenshots/hero.png" width="860" alt="缇喵截图：首页、节点拓扑、网络编辑" />
 
 </div>
@@ -97,7 +99,7 @@
 
 | 扫码分享 | English UI | 桌面小部件 |
 |:---:|:---:|:---:|
-| <img src="docs/screenshots/light-share.png" width="200"/> | <img src="docs/screenshots/en-home-connected.png" width="200"/> | <img src="docs/screenshots/widget.png" width="200"/> |
+| <img src="docs/screenshots/light-share.png" width="200"/> | <img src="docs/screenshots/en-home-connected.png" width="200"/> | <img src="docs/screenshots/light-widget.png" width="200"/> |
 
 <sub>截图使用虚构的演示数据，不对应任何真实网络。</sub>
 
@@ -137,9 +139,11 @@
 ## 隐私与安全
 
 - **配置加密存储**：网络密钥等配置用 Android Keystore 加密后保存在本机，不上传任何地方。
-- **日志不泄露密钥**：官方内核会把网络密钥写进系统日志。缇喵给内核打了两个小补丁（[`kernel/patches/`](kernel/patches)），日志里的密钥显示为 `***`。补丁失效时构建不会中断，会自动开 Issue 提醒更新。
+- **日志不泄露密钥**：官方内核会把网络密钥写进系统日志。缇喵给内核打了两个小补丁（[`kernel/patches/`](kernel/patches)），日志里的密钥显示为 `***`。补丁失效时，release 构建会直接失败；debug 构建不阻止。CI 仍会开一个 PR 便于人工 rebase，但会打上 `do not merge` 标签并在正文顶部警告。
 - **分享默认不含密钥**：二维码、链接和导出文件默认去掉密钥；TOML 原文里的密钥默认遮盖。
-- **不收集任何数据**：没有统计、没有广告。唯一的联网请求是 EasyTier 本身，以及「检查更新」时访问 GitHub。
+- **App 自身的联网**：只有「检查更新」会访问 `api.github.com`，查询本项目的 Releases 和 EasyTier 的 Releases。打开设置页「关于」时会自动检查一次，也可以点「检查更新」手动触发。请求只发送 GET 和固定 User-Agent，不上传配置、网络密钥、设备标识或使用统计。
+- **EasyTier 与诊断**：连接时，EasyTier 只按你的配置连接服务器和节点；诊断页只在你点「开始诊断」时，向你填写的服务器地址发 TCP/UDP 探测。
+- **没有遥测**：没有统计、广告或崩溃上报 SDK。release APK 不含 Google ML Kit、Firebase 或 Google Data Transport。
 
 ## 从源码构建
 
@@ -175,11 +179,30 @@ docs/      架构说明、官方对照、截图
 - 两个网络不能使用重叠的网段同时运行，缇喵会拒绝并提示。
 - App 进程被系统强制杀死后，通知栏可能残留一条旧通知，再次打开 App 即可清除。
 
+## 参与贡献
+
+欢迎提 Issue 和 PR。开发环境、模块划分、构建与测试步骤见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。提交前请运行：
+
+```bash
+./gradlew :core:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug
+```
+
 ## 致谢与许可
 
+- 缇喵代码以 [Apache License 2.0](LICENSE) 授权。
 - 网络内核：[EasyTier](https://github.com/EasyTier/EasyTier)，以 LGPL-3.0 授权，作为独立的动态库加载。详见 [`kernel/LICENSE-NOTICE.md`](kernel/LICENSE-NOTICE.md)。
+- 第三方组件与内核补丁清单见 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)。App 内「设置 > 关于 > 开源许可」也可查看。
 - 小猫是缇喵的原创形象，与任何现有角色无关。
-- 缇喵自身代码的许可证尚未确定。
+
+## English
+
+Timiao (缇喵) is a native Android client for [EasyTier](https://github.com/EasyTier/EasyTier), built with Kotlin and Jetpack Compose.
+
+- The network kernel is the official EasyTier source pinned in `kernel/UPSTREAM_TAG`, loaded as a separate dynamic library.
+- Features: Liquid Glass UI, QR/link sharing, per-app split tunneling, auto-connect, diagnostics, traffic stats, a home-screen widget, and the full official configuration.
+- The app code is licensed under Apache-2.0 (see `LICENSE`); the EasyTier kernel is LGPL-3.0. See `THIRD-PARTY-NOTICES.md` for all components and their licenses.
+- The only app-initiated network request is the update check to `api.github.com`: it runs once when the About section opens, or on demand. EasyTier itself connects only to the servers and peers in your configuration.
+- Build steps, module layout, and tests are in `docs/ARCHITECTURE.md`. The UI is available in Chinese and English.
 
 <div align="center">
 <sub>Made with 🐾 for people who keep their devices in one network.</sub>

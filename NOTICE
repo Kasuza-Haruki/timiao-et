@@ -1,0 +1,11 @@
+Timiao (缇喵)
+Copyright 2026 Kasuza-Haruki
+
+This product includes software developed by the EasyTier project
+(https://github.com/EasyTier/EasyTier), licensed under the GNU Lesser
+General Public License v3.0 (LGPL-3.0). The EasyTier kernel is distributed
+as a separate, dynamically loaded shared library
+(libeasytier_android_jni.so) and is not statically linked into the app.
+
+Third-party components and their licenses are listed in
+THIRD-PARTY-NOTICES.md.
