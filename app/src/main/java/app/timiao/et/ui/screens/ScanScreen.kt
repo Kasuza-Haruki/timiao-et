@@ -12,7 +12,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
-import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
@@ -63,17 +62,17 @@ import app.timiao.et.ui.components.PillButton
 import app.timiao.et.ui.components.ScreenHeader
 import app.timiao.et.ui.components.glass
 import app.timiao.et.ui.theme.LocalGlassColors
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.common.InputImage
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.DecodeHintType
+import com.google.zxing.InvertedLuminanceSource
+import com.google.zxing.LuminanceSource
 import com.google.zxing.MultiFormatReader
+import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.RGBLuminanceSource
 import com.google.zxing.common.HybridBinarizer
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -81,9 +80,10 @@ import kotlinx.coroutines.withContext
 /**
  * QR / link / file scanner.
  *
- * Camera scanning uses the bundled ML Kit barcode model (no Play Services needed).
- * When there is no camera or no permission the screen still works: pick an image
- * from the gallery or paste a share link.
+ * Camera scanning decodes the CameraX Y plane with ZXing core (Apache-2.0), so no
+ * closed-source ML Kit model or Google telemetry is bundled. When there is no camera
+ * or no permission the screen still works: pick an image from the gallery or paste a
+ * share link.
  */
 @Composable
 fun ScanScreen(
@@ -345,10 +345,9 @@ private fun CameraPreview(
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
         }
     }
-    val scanner = remember { BarcodeScanning.getClient() }
     val executor = remember { Executors.newSingleThreadExecutor() }
-    val lastScannedAt = remember { AtomicLong(0) }
-    val gotFrame = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    val decodeDone = remember { AtomicBoolean(false) }
+    val gotFrame = remember { AtomicBoolean(false) }
     val watchdog = remember { Handler(Looper.getMainLooper()) }
 
     DisposableEffect(lifecycleOwner) {
@@ -370,14 +369,19 @@ private fun CameraPreview(
             }
             val analysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                 .build()
             analysis.setAnalyzer(executor) { proxy ->
                 gotFrame.set(true)
-                processProxy(proxy, scanner) { raw ->
-                    val now = System.currentTimeMillis()
-                    val previous = lastScannedAt.get()
-                    if (now - previous < 1_200) return@processProxy
-                    if (lastScannedAt.compareAndSet(previous, now)) currentOnQr(raw)
+                try {
+                    if (decodeDone.get()) return@setAnalyzer
+                    val raw = decodeProxy(proxy)
+                    if (raw != null && decodeDone.compareAndSet(false, true)) {
+                        runCatching { analysis.clearAnalyzer() }
+                        watchdog.post { currentOnQr(raw) }
+                    }
+                } finally {
+                    proxy.close()
                 }
             }
             val bound = runCatching {
@@ -403,7 +407,6 @@ private fun CameraPreview(
         onDispose {
             watchdog.removeCallbacksAndMessages(null)
             runCatching { future.get().unbindAll() }
-            runCatching { scanner.close() }
             executor.shutdown()
         }
     }
@@ -411,25 +414,113 @@ private fun CameraPreview(
     AndroidView(factory = { previewView }, modifier = modifier)
 }
 
-@OptIn(ExperimentalGetImage::class)
-private fun processProxy(
-    proxy: ImageProxy,
-    scanner: com.google.mlkit.vision.barcode.BarcodeScanner,
-    onRaw: (String) -> Unit,
-) {
-    val media = proxy.image
-    if (media == null) {
-        proxy.close()
-        return
-    }
-    val image = InputImage.fromMediaImage(media, proxy.imageInfo.rotationDegrees)
-    scanner.process(image)
-        .addOnSuccessListener { barcodes ->
-            barcodes.firstOrNull {
-                it.format == Barcode.FORMAT_QR_CODE && !it.rawValue.isNullOrBlank()
-            }?.rawValue?.let(onRaw)
+/** Copies the Y plane of a CameraX frame and decodes it as a QR code. */
+private fun decodeProxy(proxy: ImageProxy): String? {
+    val plane = proxy.planes.firstOrNull() ?: return null
+    val width = proxy.width
+    val height = proxy.height
+    if (width <= 0 || height <= 0) return null
+    val rowStride = plane.rowStride
+    val pixelStride = plane.pixelStride
+    if (rowStride < width) return null
+    val rotation = proxy.imageInfo.rotationDegrees
+    return if (pixelStride == 1) {
+        val y = ByteArray(rowStride * height)
+        val buffer = plane.buffer.duplicate()
+        buffer.position(0)
+        val count = minOf(buffer.remaining(), y.size)
+        if (count > 0) buffer.get(y, 0, count)
+        QrDecoder.decodeYuv(y, width, height, rowStride, rotation)
+    } else {
+        val y = ByteArray(width * height)
+        val buffer = plane.buffer
+        for (row in 0 until height) {
+            val base = row * rowStride
+            for (col in 0 until width) {
+                val index = base + col * pixelStride
+                if (index >= buffer.limit()) return null
+                y[row * width + col] = buffer.get(index)
+            }
         }
-        .addOnCompleteListener { proxy.close() }
+        QrDecoder.decodeYuv(y, width, height, width, rotation)
+    }
+}
+
+/** ZXing-only QR decoding shared by the camera and gallery paths. */
+internal object QrDecoder {
+    private val HINTS = mapOf(
+        DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE),
+        DecodeHintType.TRY_HARDER to true,
+    )
+
+    /** Gallery path: ARGB pixels already in memory. */
+    fun decodePixels(pixels: IntArray, width: Int, height: Int): String? =
+        decodeWithInversion(RGBLuminanceSource(width, height, pixels))
+
+    /**
+     * Camera path: [y] is the luma plane; [rowStride] can be larger than [width].
+     * The central viewfinder area is cropped first, then the frame is rotated upright
+     * according to [rotationDegrees].
+     */
+    fun decodeYuv(
+        y: ByteArray,
+        width: Int,
+        height: Int,
+        rowStride: Int,
+        rotationDegrees: Int,
+    ): String? {
+        if (width <= 0 || height <= 0 || rowStride < width) return null
+        if (y.size < rowStride.toLong() * height) return null
+        val side = minOf(width, height)
+        val crop = (side * 0.88f).toInt().coerceAtLeast(32).coerceAtMost(side)
+        val left = (width - crop) / 2
+        val top = (height - crop) / 2
+        val turns = (((rotationDegrees % 360) + 360) % 360) / 90
+        // PlanarYUVLuminanceSource cannot rotate; crop to a square, rotate that, then decode.
+        val source: LuminanceSource = if (turns == 0) {
+            PlanarYUVLuminanceSource(y, rowStride, height, left, top, crop, crop, false)
+        } else {
+            val square = ByteArray(crop * crop)
+            for (row in 0 until crop) {
+                System.arraycopy(y, (top + row) * rowStride + left, square, row * crop, crop)
+            }
+            var rotated = square
+            repeat(turns) { rotated = rotateCounterClockwise(rotated, crop) }
+            PlanarYUVLuminanceSource(rotated, crop, crop, 0, 0, crop, crop, false)
+        }
+        return decodeWithInversion(source)
+    }
+
+    /** Rotates a square 8-bit luminance buffer 90° counter-clockwise. */
+    private fun rotateCounterClockwise(src: ByteArray, n: Int): ByteArray {
+        val out = ByteArray(n * n)
+        for (row in 0 until n) {
+            val srcBase = row * n
+            for (col in 0 until n) {
+                // src(col,row) -> dst(x'=row, y'=n-1-col)
+                out[(n - 1 - col) * n + row] = src[srcBase + col]
+            }
+        }
+        return out
+    }
+
+    private fun decodeWithInversion(source: LuminanceSource): String? {
+        // Some screens show inverted codes; try both polarities. The inverted pass only
+        // runs when the normal one fails.
+        for (candidate in arrayOf(source, InvertedLuminanceSource(source))) {
+            val reader = MultiFormatReader()
+            try {
+                reader.setHints(HINTS)
+                val text = reader.decodeWithState(BinaryBitmap(HybridBinarizer(candidate)))?.text
+                if (!text.isNullOrBlank()) return text
+            } catch (ignored: Exception) {
+                // NotFoundException is the common case: keep looking.
+            } finally {
+                reader.reset()
+            }
+        }
+        return null
+    }
 }
 
 @Composable
@@ -467,12 +558,7 @@ private suspend fun decodeQrImage(context: Context, uri: Uri): String? = withCon
         val height = bitmap.height
         val pixels = IntArray(width * height)
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-        val source = RGBLuminanceSource(width, height, pixels)
-        val binary = BinaryBitmap(HybridBinarizer(source))
-        val reader = MultiFormatReader().apply {
-            setHints(mapOf(DecodeHintType.POSSIBLE_FORMATS to listOf(BarcodeFormat.QR_CODE)))
-        }
-        runCatching { reader.decodeWithState(binary)?.text }.getOrNull()
+        QrDecoder.decodePixels(pixels, width, height)
     } finally {
         bitmap.recycle()
     }
