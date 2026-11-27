@@ -145,7 +145,6 @@ case "$(uname -s)" in
     ;;
 esac
 
-READELF="$(find "$NDK/toolchains/llvm/prebuilt" -path '*/bin/llvm-readelf' -type f 2>/dev/null | head -1 || true)"
 
 # remap-path-prefix keeps the builder's home and cargo paths out of panic/debug strings.
 PINNED_FLAGS="-C link-arg=-Wl,-z,max-page-size=16384 --remap-path-prefix=$HOME=/build --remap-path-prefix=$SRC=/src"
@@ -206,18 +205,18 @@ for abi in "${ABI_LIST[@]}"; do
   fi
 
   size=$(wc -c < "$jni_so" | tr -d ' ')
-  needed=""
   align="unknown"
-  if [[ -n "$READELF" ]]; then
-    needed="$("$READELF" -d "$jni_so" | grep -o 'NEEDED.*' | tr '\n' ';' || true)"
-    load_lines="$("$READELF" -lW "$jni_so" | grep -E '^[[:space:]]*LOAD' || true)"
-    if [[ -n "$load_lines" ]] && ! grep -qv '0x4000' <<<"$load_lines"; then
-      align="yes"
-    else
-      align="NO"
+  for py in python3 python; do
+    if command -v "$py" >/dev/null 2>&1; then
+      if "$py" "$ROOT/scripts/check-elf.py" "$jni_so" >/dev/null 2>&1; then
+        align="yes, JNI export present"
+      else
+        align="NO, run scripts/check-elf.py for details"
+      fi
+      break
     fi
-  fi
-  STATUS_LINES+=("$abi: $size bytes, 16KB-aligned LOAD=$align, NEEDED=${needed:-<none>}")
+  done
+  STATUS_LINES+=("$abi: $size bytes, LOAD=$align")
 done
 
 echo ""

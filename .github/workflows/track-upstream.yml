@@ -191,22 +191,9 @@ jobs:
       - name: Smoke check exports and 16 KB LOAD alignment
         run: |
           set -euo pipefail
-          readelf="$(find "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt" -path '*/bin/llvm-readelf' -type f | head -1)"
-          test -n "${readelf}"
-          for abi in arm64-v8a x86_64; do
-            so="kernel/out/${abi}/libeasytier_android_jni.so"
-            test -f "${so}"
-            "${readelf}" --dyn-syms -W "${so}" | grep -q 'Java_com_easytier_jni_EasyTierJNI_runNetworkInstance' \
-              || { echo "::error::${abi}: missing runNetworkInstance export"; exit 1; }
-            loads="$("${readelf}" -lW "${so}" | awk '$1 == "LOAD"')"
-            if [[ -z "${loads}" ]]; then
-              echo "::error::${abi}: no LOAD segments"; exit 1
-            fi
-            if grep -qv '0x4000' <<<"${loads}"; then
-              echo "::error::${abi}: LOAD segment not aligned to 0x4000"; echo "${loads}"; exit 1
-            fi
-            printf '%s: %s bytes\n' "${abi}" "$(wc -c < "${so}")"
-          done
+          python3 scripts/check-elf.py --summary\
+            kernel/out/arm64-v8a/libeasytier_android_jni.so\
+            kernel/out/x86_64/libeasytier_android_jni.so
 
       - name: Stage version bump
         env:
