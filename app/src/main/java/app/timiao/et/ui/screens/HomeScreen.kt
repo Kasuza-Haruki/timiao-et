@@ -62,6 +62,7 @@ fun HomeScreen(
     val networks by vm.networks.collectAsStateWithLifecycle()
     val active by vm.activeNetwork.collectAsStateWithLifecycle()
     val status by vm.activeStatus.collectAsStateWithLifecycle()
+    val loadError by vm.loadError.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val g = LocalGlassColors.current
     val unnamedNetwork = stringResource(R.string.home_unnamed_network)
@@ -109,6 +110,29 @@ fun HomeScreen(
                     )
                 },
             )
+        }
+
+        if (loadError != null) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .glass(RoundedCornerShape(22.dp), GlassLevel.Regular)
+                        .padding(14.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.config_load_error_title),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.config_load_error_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = g.muted,
+                    )
+                }
+            }
         }
 
         if (active != null) {

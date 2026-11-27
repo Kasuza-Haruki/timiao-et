@@ -78,7 +78,16 @@ class MainActivity : AppCompatActivity() {
                 // Never reuse someone else's instance id: two devices with one id collide.
                 val existing = container.configRepository.get(cfg.id)
                 if (existing != null) cfg = cfg.copy(instanceId = java.util.UUID.randomUUID().toString())
-                container.configRepository.save(cfg)
+                try {
+                    container.configRepository.save(cfg)
+                } catch (error: Exception) {
+                    val message = if (error is app.timiao.et.core.ConfigWriteBlockedException) {
+                        getString(R.string.storage_write_blocked)
+                    } else {
+                        getString(R.string.storage_save_failed)
+                    }
+                    throw IllegalStateException(message, error)
+                }
                 openImported(cfg.id, focusSecret = !hasSecret)
                 if (!hasSecret) android.widget.Toast.makeText(this@MainActivity, getString(R.string.main_imported_missing_secret, cfg.networkName), android.widget.Toast.LENGTH_LONG).show()
                 else android.widget.Toast.makeText(this@MainActivity, getString(R.string.main_imported, cfg.networkName), android.widget.Toast.LENGTH_SHORT).show()

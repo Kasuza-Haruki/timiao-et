@@ -927,4 +927,8 @@
     <string name="event_detail_backend">后端：%1$s</string>
     <string name="event_detail_port_forward">%1$s %2$s → %3$s</string>
     <string name="core_overlap_message">与正在运行的「%1$s」网段重叠（%2$s），请先断开它或修改网段</string>
+    <string name="config_load_error_title">无法读取已保存的网络配置</string>
+    <string name="config_load_error_body">文件已保留，不会被覆盖。可能原因：系统密钥已重置。为避免数据丢失，新建、导入和删除网络已暂时停用。</string>
+    <string name="storage_write_blocked">配置读取失败，已禁止写入，原文件未改动。</string>
+    <string name="storage_save_failed">保存失败，原文件未改动。</string>
 </resources>

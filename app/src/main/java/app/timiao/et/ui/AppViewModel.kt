@@ -39,6 +39,9 @@ class AppViewModel(
 
     val settings: StateFlow<AppSettings> = settingsStore.settings
 
+    /** Non-null when the saved file exists but could not be read; writes are then refused. */
+    val loadError: StateFlow<String?> = repository.loadError
+
     val networks: StateFlow<List<UiNetwork>> = repository.networks
         .map { list -> list.map { it.toUi() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -121,15 +124,13 @@ class AppViewModel(
         viewModelScope.launch { engine.stop(id) }
     }
 
-    fun saveNetwork(network: UiNetwork) {
-        viewModelScope.launch { repository.save(network.toConfig(repository.get(network.id))) }
+    suspend fun saveNetwork(network: UiNetwork): Result<Unit> = runCatching {
+        repository.save(network.toConfig(repository.get(network.id)))
     }
 
-    fun deleteNetwork(id: String) {
-        viewModelScope.launch {
-            repository.delete(id)
-            if (_activeNetworkId.value == id) selectNetwork(networks.value.firstOrNull { it.id != id }?.id)
-        }
+    suspend fun deleteNetwork(id: String): Result<Unit> = runCatching {
+        repository.delete(id)
+        if (_activeNetworkId.value == id) selectNetwork(networks.value.firstOrNull { it.id != id }?.id)
     }
 
     suspend fun importToml(text: String): Result<UiNetwork> = runCatching {

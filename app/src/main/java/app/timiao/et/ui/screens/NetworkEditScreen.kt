@@ -390,9 +390,17 @@ fun NetworkEditScreen(
                 return
             }
             val ui = parsed.toUi().copy(id = current.id)
-            vm.saveNetwork(ui)
-            Toast.makeText(context, context.getString(R.string.edit_saved), Toast.LENGTH_SHORT).show()
-            onBack()
+            scope.launch {
+                vm.saveNetwork(ui)
+                    .onSuccess {
+                        Toast.makeText(context, context.getString(R.string.edit_saved), Toast.LENGTH_SHORT).show()
+                        onBack()
+                    }
+                    .onFailure { error ->
+                        val res = if (error is app.timiao.et.core.ConfigWriteBlockedException) R.string.storage_write_blocked else R.string.storage_save_failed
+                        Toast.makeText(context, context.getString(res), Toast.LENGTH_LONG).show()
+                    }
+            }
             return
         }
         saveAttempted = true
@@ -402,9 +410,16 @@ fun NetworkEditScreen(
             Toast.makeText(context, context.getString(R.string.edit_invalid_count, errors.size), Toast.LENGTH_SHORT).show()
             return
         }
-        vm.saveNetwork(ui)
-        Toast.makeText(context, context.getString(R.string.edit_saved), Toast.LENGTH_SHORT).show()
-        onBack()
+        scope.launch {
+            vm.saveNetwork(ui)
+                .onSuccess {
+                    Toast.makeText(context, context.getString(R.string.edit_saved), Toast.LENGTH_SHORT).show()
+                    onBack()
+                }
+                .onFailure {
+                    Toast.makeText(context, context.getString(R.string.storage_write_blocked), Toast.LENGTH_LONG).show()
+                }
+        }
     }
 
     val dirty = current.withoutBase() != initialForm?.withoutBase() || texts != initialTexts ||
@@ -1710,9 +1725,15 @@ fun NetworkEditScreen(
             text = stringResource(R.string.edit_delete_text, current.name),
             confirmText = stringResource(R.string.action_delete),
             onConfirm = {
-                vm.deleteNetwork(networkId)
+                scope.launch {
+                    vm.deleteNetwork(networkId)
+                        .onSuccess { onBack() }
+                        .onFailure { error ->
+                            val res = if (error is app.timiao.et.core.ConfigWriteBlockedException) R.string.storage_write_blocked else R.string.storage_save_failed
+                            Toast.makeText(context, context.getString(res), Toast.LENGTH_LONG).show()
+                        }
+                }
                 showDelete = false
-                onBack()
             },
             onDismiss = { showDelete = false },
         )

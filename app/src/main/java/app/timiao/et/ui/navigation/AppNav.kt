@@ -142,7 +142,16 @@ fun TimiaoRoot(vm: AppViewModel) {
                 val container = (ctx.applicationContext as app.timiao.et.TimiaoApplication).container
                 app.timiao.et.ui.screens.ScanScreen(
                     importSink = { toml, hasSecret ->
-                        val cfg = importSharedToml(container, toml)
+                        val cfg = try {
+                            importSharedToml(container, toml)
+                        } catch (error: Exception) {
+                            val res = if (error is app.timiao.et.core.ConfigWriteBlockedException) {
+                                app.timiao.et.R.string.storage_write_blocked
+                            } else {
+                                app.timiao.et.R.string.storage_save_failed
+                            }
+                            throw IllegalStateException(ctx.getString(res), error)
+                        }
                         // Same hand-off as a deep link: open the editor, focus the secret if absent.
                         vm.requestOpenNetwork(cfg.id, focusSecret = !hasSecret)
                     },

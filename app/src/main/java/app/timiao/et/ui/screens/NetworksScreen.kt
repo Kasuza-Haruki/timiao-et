@@ -208,7 +208,14 @@ fun NetworksScreen(
             text = stringResource(R.string.networks_delete_text, target.name),
             confirmText = stringResource(R.string.action_delete),
             onConfirm = {
-                vm.deleteNetwork(target.id)
+                scope.launch {
+                    vm.deleteNetwork(target.id)
+                        .onFailure { error ->
+                            importFailure = context.getString(
+                                if (error is app.timiao.et.core.ConfigWriteBlockedException) R.string.storage_write_blocked else R.string.storage_save_failed,
+                            )
+                        }
+                }
                 deleteTarget = null
             },
             onDismiss = { deleteTarget = null },

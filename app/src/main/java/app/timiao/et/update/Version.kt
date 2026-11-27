@@ -24,6 +24,23 @@ public fun compareVersions(left: String, right: String): Int {
     for (index in 0 until preSize) {
         val x = a.pre.getOrNull(index) ?: return -1
         val y = b.pre.getOrNull(index) ?: return 1
+        val result = comparePreSegment(x, y)
+        if (result != 0) return result
+    }
+    return 0
+}
+
+/**
+ * Compares one pre-release segment. Digit runs inside a segment compare as
+ * numbers, so `rc10` is newer than `rc9` instead of losing to a string compare.
+ */
+private fun comparePreSegment(left: String, right: String): Int {
+    val a = splitAlphaNumeric(left)
+    val b = splitAlphaNumeric(right)
+    val size = maxOf(a.size, b.size)
+    for (index in 0 until size) {
+        val x = a.getOrNull(index) ?: return -1
+        val y = b.getOrNull(index) ?: return 1
         val xNumber = x.toIntOrNull()
         val yNumber = y.toIntOrNull()
         val result = when {
@@ -35,6 +52,24 @@ public fun compareVersions(left: String, right: String): Int {
         if (result != 0) return result
     }
     return 0
+}
+
+/** Splits `rc10` into `rc`, `10`; keeps separators out of the comparison. */
+private fun splitAlphaNumeric(value: String): List<String> {
+    val parts = ArrayList<String>()
+    val current = StringBuilder()
+    var digits: Boolean? = null
+    for (char in value) {
+        val isDigit = char.isDigit()
+        if (digits != null && digits != isDigit) {
+            parts.add(current.toString())
+            current.clear()
+        }
+        digits = isDigit
+        current.append(char)
+    }
+    if (current.isNotEmpty()) parts.add(current.toString())
+    return parts
 }
 
 public fun isNewerVersion(candidate: String, current: String): Boolean =
