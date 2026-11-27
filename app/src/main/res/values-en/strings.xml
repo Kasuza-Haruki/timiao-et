@@ -931,4 +931,8 @@
     <string name="event_detail_backend">Backend: %1$s</string>
     <string name="event_detail_port_forward">%1$s %2$s → %3$s</string>
     <string name="core_overlap_message">Overlaps the subnet of running network \"%1$s\" (%2$s). Disconnect it or change the subnet first.</string>
+    <string name="config_load_error_title">Cannot read saved network configuration</string>
+    <string name="config_load_error_body">The file has been kept and will not be overwritten. The system key may have been reset. To prevent data loss, creating, importing, and deleting networks are disabled.</string>
+    <string name="storage_write_blocked">The saved configuration could not be read. Writing is disabled; the original file is unchanged.</string>
+    <string name="storage_save_failed">Save failed. The original file is unchanged.</string>
 </resources>

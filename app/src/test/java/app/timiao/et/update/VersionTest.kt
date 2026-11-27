@@ -19,6 +19,17 @@ class VersionTest {
     fun `numeric parts compare as numbers`() {
         assertTrue(compareVersions("2.7.10", "2.7.9") > 0)
         assertTrue(compareVersions("2.10.0", "2.9.0") > 0)
+        assertTrue(compareVersions("1.0.10", "1.0.9") > 0)
+        assertTrue(compareVersions("1.0.9", "1.0.10") < 0)
+    }
+
+    @Test
+    fun `release candidate numbers compare as numbers`() {
+        assertTrue(compareVersions("1.0.0-rc10", "1.0.0-rc9") > 0)
+        assertTrue(compareVersions("1.0.0-rc9", "1.0.0-rc10") < 0)
+        assertTrue(compareVersions("1.0.0-rc10", "1.0.0-rc2") > 0)
+        assertTrue(compareVersions("1.0.0", "1.0.0-rc1") > 0)
+        assertTrue(compareVersions("1.0.0-rc1", "1.0.0") < 0)
     }
 
     @Test
