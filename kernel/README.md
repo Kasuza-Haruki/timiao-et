@@ -22,7 +22,7 @@ Windows:
 Linux / CI:
 
 ```bash
-EASYTIER_PROXY= scripts/build-kernel.sh --tag v2.7.1 --abis arm64-v8a,armeabi-v7a,x86,x86_64
+EASYTIER_PROXY= scripts/build-kernel.sh --tag v2.7.1 --abis arm64-v8a,x86_64
 ```
 
 Both scripts:
@@ -165,10 +165,11 @@ before loading it. The JNI `.so` does not require the separate FFI `.so` when
 ## Upstream tracking
 
 `.github/workflows/track-upstream.yml` runs daily and on demand. It resolves the
-latest stable GitHub release (prereleases ignored unless requested), compares it
-with `kernel/UPSTREAM_TAG`, builds all four ABIs with NDK 27, applies patches on
-a best-effort basis, checks the `runNetworkInstance` export and `0x4000` LOAD
-alignment, and then opens a PR that updates `UPSTREAM_TAG`. A failed build does
+newest GitHub release (upstream flags most releases as prereleases, so the
+newest one wins), compares it with `kernel/UPSTREAM_TAG` and does nothing unless
+it is strictly higher, builds the two ABIs the app ships with NDK 27, applies patches on
+a best-effort basis, checks the `runNetworkInstance` export and 16 KB LOAD alignment
+with `scripts/check-elf.py`, and then opens a PR that updates `UPSTREAM_TAG`. A failed build does
 not update the tag. A patch that no longer applies does not fail the workflow:
 the PR still opens with `[patch needs rebase]` in the title, the failed patch
 names go into the body, and an issue is opened or updated for manual rebase.

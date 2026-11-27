@@ -27,6 +27,13 @@ class Problem(Exception):
     pass
 
 
+def unpack(fmt, data, offset):
+    try:
+        return fmt.unpack_from(data, offset)
+    except struct.error as exc:
+        raise Problem(f"truncated or malformed ELF: {exc}") from exc
+
+
 def read_elf(path):
     try:
         with open(path, "rb") as fh:
@@ -39,7 +46,7 @@ def read_elf(path):
         raise Problem("only 64-bit ELF libraries are supported")
     if data[5] != 1:
         raise Problem("only little-endian ELF libraries are supported")
-    fields = ELF64_EHDR.unpack_from(data, 0)
+    fields = unpack(ELF64_EHDR, data, 0)
     phoff, shoff = fields[5], fields[6]
     phentsize, phnum = fields[9], fields[10]
     shentsize, shnum = fields[11], fields[12]
@@ -51,7 +58,7 @@ def load_alignments(data, phoff, phentsize, phnum):
         raise Problem("no program headers")
     aligns = []
     for i in range(phnum):
-        seg = ELF64_PHDR.unpack_from(data, phoff + i * phentsize)
+        seg = unpack(ELF64_PHDR, data, phoff + i * phentsize)
         if seg[0] == PT_LOAD:
             aligns.append(seg[7])
     if not aligns:
@@ -63,7 +70,7 @@ def exported_symbols(data, shoff, shentsize, shnum):
     """Return the set of defined dynamic symbol names, or None if stripped."""
     if shoff == 0 or shnum == 0:
         return None
-    sections = [ELF64_SHDR.unpack_from(data, shoff + i * shentsize) for i in range(shnum)]
+    sections = [unpack(ELF64_SHDR, data, shoff + i * shentsize) for i in range(shnum)]
     for sh in sections:
         if sh[1] != SHT_DYNSYM:
             continue
@@ -75,7 +82,7 @@ def exported_symbols(data, shoff, shentsize, shnum):
         entsize = entsize or ELF64_SYM.size
         names = set()
         for off in range(dynsym_off, dynsym_off + dynsym_size, entsize):
-            st_name, _, _, st_shndx, _, _ = ELF64_SYM.unpack_from(data, off)
+            st_name, _, _, st_shndx, _, _ = unpack(ELF64_SYM, data, off)
             if st_name == 0 or st_shndx == SHN_UNDEF:
                 continue
             end = strings.find(b"\x00", st_name)
@@ -87,7 +94,9 @@ def exported_symbols(data, shoff, shentsize, shnum):
 def check(path, summary):
     data, phoff, phentsize, phnum, shoff, shentsize, shnum = read_elf(path)
     aligns = load_alignments(data, phoff, phentsize, phnum)
-    bad = [hex(a) for a in aligns if a != REQUIRED_ALIGN]
+    # Any alignment that is a multiple of 16 KB is fine; a linker may pick a
+    # larger value (e.g. 0x10000) on a future NDK.
+    bad = [hex(a) for a in aligns if a < REQUIRED_ALIGN or a % REQUIRED_ALIGN]
     symbols = exported_symbols(data, shoff, shentsize, shnum)
     if symbols is None:
         # Section headers stripped: fall back to the dynamic string table.

@@ -8,7 +8,7 @@
 # Environment:
 #   EASYTIER_PROXY       optional git HTTP(S) proxy, e.g. http://<proxy-host>:<port>
 #   EASYTIER_LOCAL_SRC   optional local EasyTier clone used to speed up cloning
-#   CARGO_TARGET_DIR     optional cargo target dir (default: kernel/src/target)
+#   CARGO_TARGET_DIR     optional cargo target dir (default: kernel/cargo-target)
 #   ANDROID_NDK_HOME     Android NDK (r27+ recommended)
 set -euo pipefail
 
@@ -148,7 +148,9 @@ esac
 
 # remap-path-prefix keeps the builder's home and cargo paths out of panic/debug strings.
 PINNED_FLAGS="-C link-arg=-Wl,-z,max-page-size=16384 --remap-path-prefix=$HOME=/build --remap-path-prefix=$SRC=/src"
-export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$SRC/target}"
+# Keep build output outside kernel/src so a fresh clone of the upstream
+# source does not wipe it; the workflow caches this directory.
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/kernel/cargo-target}"
 mkdir -p "$CARGO_TARGET_DIR" "$OUT_ROOT"
 
 declare -A TRIPLE_MAP=(

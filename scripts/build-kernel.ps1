@@ -59,7 +59,9 @@ foreach ($abi in $AbiList) {
     }
 }
 
-if (-not $TargetDir) { $TargetDir = Join-Path $Src "target" }
+# Keep build output outside kernel/src so a fresh clone of the upstream source
+# does not wipe it.
+if (-not $TargetDir) { $TargetDir = Join-Path $Root "kernel/cargo-target" }
 if (-not [System.IO.Path]::IsPathRooted($TargetDir)) { $TargetDir = Join-Path $Root $TargetDir }
 
 function Invoke-Git {

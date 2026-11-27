@@ -11,7 +11,7 @@ segments compare numerically (1.0.0-rc10 > 1.0.0-rc9).
 import re
 import sys
 
-VALID = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?$")
+VALID = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?(?:\+[0-9A-Za-z.]+)?$")
 
 
 def parse(tag):
@@ -28,7 +28,7 @@ def parse(tag):
             parts.append((0, int(part), ""))
         else:
             # Split a trailing number so rc10 sorts above rc9.
-            m2 = re.match(r"^(\D*?)(\d*)$", part)
+            m2 = re.match(r"^(.*?)(\d*)$", part)
             parts.append((1, int(m2.group(2)) if m2.group(2) else 0, m2.group(1)))
     return (major, minor, patch, 0, tuple(parts))
 
@@ -46,7 +46,11 @@ def main(argv):
         return 0
     if len(argv) == 4 and argv[1] == "gt":
         a, b = parse(argv[2]), parse(argv[3])
-        return 0 if a is not None and b is not None and a > b else 1
+        if a is None or b is None:
+            bad = argv[2] if a is None else argv[3]
+            sys.stderr.write(f"not a version: {bad}\n")
+            return 2
+        return 0 if a > b else 1
     sys.stderr.write(__doc__)
     return 2
 

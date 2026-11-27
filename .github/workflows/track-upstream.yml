@@ -78,12 +78,26 @@ jobs:
           if [[ "${FORCE}" == "true" ]]; then
             echo "Building ${tag} because force was requested."
             echo "should_build=true" >> "$GITHUB_OUTPUT"
-          elif [[ -z "${current}" ]] || python3 scripts/semver.py gt "${tag}" "${current}"; then
-            echo "Building ${tag} (current pin: ${current:-none})."
+          elif [[ -z "${current}" ]]; then
+            echo "Building ${tag}; kernel/UPSTREAM_TAG is empty."
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Upstream ${tag} is not newer than the pinned ${current}; nothing to do."
-            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            rc=0
+            python3 scripts/semver.py gt "${tag}" "${current}" || rc=$?
+            case "${rc}" in
+              0)
+                echo "Building ${tag} (current pin: ${current})."
+                echo "should_build=true" >> "$GITHUB_OUTPUT"
+                ;;
+              1)
+                echo "Upstream ${tag} is not newer than the pinned ${current}; nothing to do."
+                echo "should_build=false" >> "$GITHUB_OUTPUT"
+                ;;
+              *)
+                echo "::error::Cannot compare ${tag} with kernel/UPSTREAM_TAG=${current}. Fix the pin."
+                exit 1
+                ;;
+            esac
           fi
 
   build:
@@ -124,7 +138,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            kernel/src/target
+            kernel/cargo-target
           key: kernel-${{ runner.os }}-${{ needs.check.outputs.tag }}-${{ hashFiles('scripts/build-kernel.sh') }}
           restore-keys: |
             kernel-${{ runner.os }}-${{ needs.check.outputs.tag }}-
@@ -136,6 +150,7 @@ jobs:
           yes | "${SDK}/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
           "${SDK}/cmdline-tools/latest/bin/sdkmanager" "ndk;${NDK_VERSION}"
           echo "ANDROID_NDK_HOME=${SDK}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=${SDK}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
       # build-kernel.sh applies kernel/patches/*.patch in filename order on a
       # best-effort basis: only patches that pass `git apply --check` are
@@ -290,7 +305,7 @@ jobs:
           body-path: ${{ steps.pr_body.outputs.path }}
 
       - name: Mark PR do not merge
-        if: steps.patches.outputs.failed != ''
+        if: steps.patches.outputs.failed != '' && steps.cpr.outputs.pull-request-number != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
