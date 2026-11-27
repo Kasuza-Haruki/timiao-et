@@ -59,9 +59,9 @@ jobs:
             # EasyTier publishes almost every release as a GitHub prerelease and
             # keeps an old one flagged stable, so `releases/latest` is stale.
             # Take the highest version among all published releases instead.
-            tag="$(gh api 'repos/EasyTier/EasyTier/releases?per_page=100' \
+            tag="$( { gh api 'repos/EasyTier/EasyTier/releases?per_page=100' \
               --jq '.[] | select(.draft | not) | .tag_name' \
-              | python3 scripts/semver.py max)"
+              | python3 scripts/semver.py max; } || true )"
             if [[ -z "${tag}" ]]; then
               echo "::error::Could not resolve an upstream release tag"
               exit 1
@@ -118,7 +118,7 @@ jobs:
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1, toolchain 1.95
         with:
           toolchain: "1.95"
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android,x86_64-linux-android
 
       - name: Install cargo-ndk
         uses: taiki-e/install-action@893d6ee8d714b6c7dfe2bcd94e5759e9a7958a7e # v2
@@ -139,9 +139,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             kernel/cargo-target
-          key: kernel-${{ runner.os }}-${{ needs.check.outputs.tag }}-${{ hashFiles('scripts/build-kernel.sh') }}
+          key: kernel-cargo-${{ runner.os }}-${{ needs.check.outputs.tag }}-${{ hashFiles('scripts/build-kernel.sh') }}
           restore-keys: |
-            kernel-${{ runner.os }}-${{ needs.check.outputs.tag }}-
+            kernel-cargo-${{ runner.os }}-${{ needs.check.outputs.tag }}-
 
       - name: Install Android NDK r27
         run: |
@@ -206,7 +206,7 @@ jobs:
       - name: Smoke check exports and 16 KB LOAD alignment
         run: |
           set -euo pipefail
-          python3 scripts/check-elf.py --summary\
+          python3 scripts/check-elf.py --summary \
             kernel/out/arm64-v8a/libeasytier_android_jni.so\
             kernel/out/x86_64/libeasytier_android_jni.so
 

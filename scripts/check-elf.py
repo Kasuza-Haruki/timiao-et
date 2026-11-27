@@ -42,9 +42,11 @@ def read_elf(path):
         raise Problem(f"cannot read file: {exc.strerror}") from exc
     if data[:4] != b"\x7fELF":
         raise Problem("not an ELF file")
-    if data[4] != 2:
+    if len(data) < 16:
+        raise Problem("truncated ELF header")
+    if data[4:5] != b"\x02":
         raise Problem("only 64-bit ELF libraries are supported")
-    if data[5] != 1:
+    if data[5:6] != b"\x01":
         raise Problem("only little-endian ELF libraries are supported")
     fields = unpack(ELF64_EHDR, data, 0)
     phoff, shoff = fields[5], fields[6]

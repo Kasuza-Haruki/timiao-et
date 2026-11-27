@@ -39,12 +39,12 @@ Both scripts:
    `easytier-contrib/easytier-ffi` and `easytier-contrib/easytier-android-jni`.
 4. Copy only `libeasytier_android_jni.so` to `kernel/out/<abi>/` and
    `app/src/main/jniLibs/<abi>/`, and remove any stale `libeasytier_ffi.so`.
-5. Print size, `NEEDED` entries, and 16 KB LOAD alignment.
+5. Print the size and verify the JNI export and 16 KB LOAD alignment
+   (`scripts/check-elf.py`).
 
 Requirements: Rust 1.95 (from upstream `rust-toolchain.toml`), `cargo-ndk`,
 Android NDK r27+ (`ANDROID_NDK_HOME`). `CARGO_TARGET_DIR` is honored; set it to
-a large disk, for example `<CARGO_TARGET_DIR>` (default:
-`kernel/src/target`).
+a directory on a large disk (default: `kernel/cargo-target`).
 
 Windows-gnu hosts also need a real MinGW toolchain (gcc, as, dlltool) and
 libclang for `aws-lc-sys` and `kcp-sys`/bindgen. Rust's bundled windows-gnu gcc
